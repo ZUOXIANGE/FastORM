@@ -6,11 +6,6 @@
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);FastORM.Generated</InterceptorsNamespaces>
-    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);FastORM.Generated</InterceptorsPreviewNamespaces>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <Features>InterceptorsPreview</Features>
-    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)generated</CompilerGeneratedFilesOutputPath>
-    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\packages</RestoreAdditionalProjectSources>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
