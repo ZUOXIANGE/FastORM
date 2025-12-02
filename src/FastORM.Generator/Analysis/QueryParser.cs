@@ -37,6 +37,23 @@ internal static class QueryParser
             qModel.EndOnIQueryable = true;
         }
 
+        // Fix: Only intercept query methods if they are on CompilableQuery, IQueryable or Group
+        if (!symbol.Name.StartsWith("Insert") && !symbol.Name.StartsWith("Update") && !symbol.Name.StartsWith("Delete"))
+        {
+             if (paramType != null)
+             {
+                  var typeName = paramType.Name;
+                  var ns = paramType.ContainingNamespace?.ToDisplayString();
+                  
+                  bool isValid = typeName.Contains("IQueryable") || 
+                                 paramType.AllInterfaces.Any(i => i.Name.Contains("IQueryable")) ||
+                                 (typeName == "CompilableQuery" && ns == "FastORM") ||
+                                 (typeName == "Group" && ns == "FastORM");
+                                 
+                  if (!isValid) return null;
+             }
+        }
+
         if (symbol.Name.EndsWith("Async"))
         {
             qModel.IsAsync = true;
