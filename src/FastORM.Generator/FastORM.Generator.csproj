@@ -6,20 +6,10 @@
     <LangVersion>latest</LangVersion>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <PackageId>FastORM.Generator</PackageId>
-    <Version>0.1.4</Version>
-    <Authors>FastORM</Authors>
-    <Description>FastORM LINQ-to-ADO.NET Source Generator</Description>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageOutputPath>$(MSBuildThisFileDirectory)..\..\packages</PackageOutputPath>
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" />
-    <None Include="$(TargetDir)FastORM.Generator.pdb" Pack="true" PackagePath="analyzers/dotnet/cs" Condition="Exists('$(TargetDir)FastORM.Generator.pdb')" />
   </ItemGroup>
 </Project>
