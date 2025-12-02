@@ -8,6 +8,7 @@ internal sealed class QueryModel
     public readonly List<IPropertySymbol> InsertProperties = new();
     public readonly List<(IPropertySymbol prop, bool desc)> OrderBy = new();
     public readonly List<PredicateModel> Predicates = new();
+    public readonly List<string> DynamicPredicates = new();
     public readonly List<(string Column, string ValueExpressionCode)> Updates = new();
     public ITypeSymbol ElementType { get; set; } = null!;
     public string TableName { get; set; } = "";

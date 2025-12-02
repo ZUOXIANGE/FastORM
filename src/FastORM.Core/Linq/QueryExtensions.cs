@@ -75,21 +75,13 @@ public static class QueryExtensions
         return source;
     }
 
-    public static IQueryable<T> Where<T>(this IQueryable<T> source, Func<T, bool> predicate)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<T>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: Where requires FastORM IQueryable root");
-    }
+    // REMOVED: Custom Where/OrderBy implementations that accept Func<T, bool>
+    // We now rely on System.Linq.Queryable extensions which build Expression Trees.
+    // This allows ValueExtractor to work correctly at runtime.
 
     public static CompilableQuery<T> Where<T>(this CompilableQuery<T> source, Func<T, bool> predicate)
     {
         return source;
-    }
-
-    public static IQueryable<T> OrderBy<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<T>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: OrderBy requires FastORM IQueryable root");
     }
 
     public static CompilableQuery<T> OrderBy<T, TKey>(this CompilableQuery<T> source, Func<T, TKey> keySelector)
@@ -97,32 +89,16 @@ public static class QueryExtensions
         return source;
     }
 
-    public static IQueryable<T> OrderByDescending<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<T>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: OrderByDescending requires FastORM IQueryable root");
-    }
-
     public static CompilableQuery<T> OrderByDescending<T, TKey>(this CompilableQuery<T> source, Func<T, TKey> keySelector)
     {
         return source;
     }
 
-    public static IQueryable<TResult> Select<T, TResult>(this IQueryable<T> source, Func<T, TResult> selector)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<TResult>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: Select requires FastORM IQueryable root");
-    }
+    // REMOVED: Select/Take/Skip/Distinct for IQueryable to support Expression Tree building via System.Linq.Queryable
 
     public static CompilableQuery<TResult> Select<T, TResult>(this CompilableQuery<T> source, Func<T, TResult> selector)
     {
         return new CompilableQuery<TResult>(source.Context, source.TableName);
-    }
-
-    public static IQueryable<T> Take<T>(this IQueryable<T> source, int count)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<T>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: Take requires FastORM IQueryable root");
     }
 
     public static CompilableQuery<T> Take<T>(this CompilableQuery<T> source, int count)
@@ -130,21 +106,9 @@ public static class QueryExtensions
         return source;
     }
 
-    public static IQueryable<T> Skip<T>(this IQueryable<T> source, int count)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<T>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: Skip requires FastORM IQueryable root");
-    }
-
     public static CompilableQuery<T> Skip<T>(this CompilableQuery<T> source, int count)
     {
         return source;
-    }
-
-    public static IQueryable<T> Distinct<T>(this IQueryable<T> source)
-    {
-        if (source is FastOrmQueryable<T> fo) return new FastOrmQueryable<T>(fo.Context, fo.TableName);
-        throw new NotSupportedException("FastORM: Distinct requires FastORM IQueryable root");
     }
 
     public static CompilableQuery<T> Distinct<T>(this CompilableQuery<T> source)

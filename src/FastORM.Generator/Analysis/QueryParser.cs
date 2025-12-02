@@ -319,22 +319,32 @@ internal static class QueryParser
                 var name = method?.Name;
                 if (name == "Where")
                 {
-                    var arg = current.ArgumentList.Arguments[0].Expression as SimpleLambdaExpressionSyntax;
-                    if (arg is null) { return Fail(qModel, Diagnostics.UnsupportedExpression, current.ToString()); }
-                    if (arg.Modifiers.ToString().IndexOf("static", StringComparison.Ordinal) < 0) { return Fail(qModel, Diagnostics.NonStaticLambda); }
-                    
-                    if (arg.Body is ExpressionSyntax bodyExpr)
+                    var argExpr = current.ArgumentList.Arguments[0].Expression;
+                    if (argExpr is SimpleLambdaExpressionSyntax arg)
                     {
-                        var p = ParsePredicate(bodyExpr, qModel, sm);
-                        if (p != null)
+                        if (arg.Modifiers.ToString().IndexOf("static", StringComparison.Ordinal) < 0) 
+                        { 
+                            // REMOVED LIMITATION: Allow non-static lambdas for runtime parameter extraction
+                            // return Fail(qModel, Diagnostics.NonStaticLambda); 
+                        }
+                        
+                        if (arg.Body is ExpressionSyntax bodyExpr)
                         {
-                            if (p.Kind == PredicateKind.And) qModel.Predicates.AddRange(p.Children);
-                            else qModel.Predicates.Add(p);
+                            var p = ParsePredicate(bodyExpr, qModel, sm);
+                            if (p != null)
+                            {
+                                if (p.Kind == PredicateKind.And) qModel.Predicates.AddRange(p.Children);
+                                else qModel.Predicates.Add(p);
+                            }
+                        }
+                        else
+                        {
+                            return Fail(qModel, Diagnostics.UnsupportedExpression, arg.Body.ToString());
                         }
                     }
                     else
                     {
-                        return Fail(qModel, Diagnostics.UnsupportedExpression, arg.Body.ToString());
+                        qModel.DynamicPredicates.Add(argExpr.ToString());
                     }
                 }
                 else if (name == "Take")
@@ -353,7 +363,7 @@ internal static class QueryParser
                 {
                      var arg = current.ArgumentList.Arguments[0].Expression as SimpleLambdaExpressionSyntax;
                      if (arg is null) { return Fail(qModel, Diagnostics.UnsupportedExpression, current.ToString()); }
-                     if (arg.Modifiers.ToString().IndexOf("static", StringComparison.Ordinal) < 0) { return Fail(qModel, Diagnostics.NonStaticLambda); }
+                     // if (arg.Modifiers.ToString().IndexOf("static", StringComparison.Ordinal) < 0) { return Fail(qModel, Diagnostics.NonStaticLambda); }
                      if (arg.Body is MemberAccessExpressionSyntax maOrder)
                      {
                          var propSym = sm.GetSymbolInfo(maOrder).Symbol as IPropertySymbol;
@@ -365,9 +375,9 @@ internal static class QueryParser
                 {
                     var arg = current.ArgumentList.Arguments[0].Expression as LambdaExpressionSyntax;
                     if (arg is null) { return Fail(qModel, Diagnostics.UnsupportedExpression, current.ToString()); }
-                    bool isStatic = false;
-                    foreach(var m in arg.Modifiers) { if (m.IsKind(SyntaxKind.StaticKeyword)) isStatic = true; }
-                    if (!isStatic) { return Fail(qModel, Diagnostics.NonStaticLambda); }
+                    // bool isStatic = false;
+                    // foreach(var m in arg.Modifiers) { if (m.IsKind(SyntaxKind.StaticKeyword)) isStatic = true; }
+                    // if (!isStatic) { return Fail(qModel, Diagnostics.NonStaticLambda); }
                     
                     ParseProjection(arg, qModel, sm);
                 }
@@ -550,7 +560,17 @@ internal static class QueryParser
                 var sym = sm.GetSymbolInfo(left).Symbol as IPropertySymbol;
                 if (sym != null)
                 {
-                    return new PredicateModel { Left = sym, Operator = be.OperatorToken.Text, RightExpressionCode = be.Right.ToString(), Kind = PredicateKind.Binary };
+                    // Note: Right side might be a constant OR a variable/expression.
+                    // If it's a variable, we need to handle it properly in emitter.
+                    // For now, we just store the code. The Emitter will decide if it's a constant or parameter.
+                    // Actually, QueryEmitter.EmitParameters treats everything not in RightConstant as a parameter.
+                    // But we need to be careful: if we just store code, we don't know if it's constant.
+                    
+                    object? constVal = null;
+                    var constant = sm.GetConstantValue(be.Right);
+                    if (constant.HasValue) constVal = constant.Value;
+                    
+                    return new PredicateModel { Left = sym, Operator = be.OperatorToken.Text, RightExpressionCode = be.Right.ToString(), RightConstant = constVal, Kind = PredicateKind.Binary };
                 }
             }
         }

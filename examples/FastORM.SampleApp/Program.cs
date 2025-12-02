@@ -20,3 +20,5 @@ await GroupByDemo.RunAsync(ctx);
 await GroupByDemo.RunSumAsync(ctx);
 await AggregationDemo.RunAsync(ctx);
 await BulkOperationsDemo.RunAsync(ctx);
+await DynamicExpressionDemo.RunIQueryable(ctx);
+

@@ -17,12 +17,12 @@ public sealed class FastOrmQueryable<T> : IQueryable<T>, IOrderedQueryable<T>
 
     public FastOrmQueryable(FastDbContext context, string tableName)
     {
-        Context = context; TableName = tableName; Expression = Expression.Constant(this); Provider = new FastOrmQueryProvider();
+        Context = context; TableName = tableName; Expression = Expression.Constant(this); Provider = new FastOrmQueryProvider(context, tableName);
     }
 
     internal FastOrmQueryable(FastDbContext context, string tableName, Expression expression)
     {
-        Context = context; TableName = tableName; Expression = expression; Provider = new FastOrmQueryProvider();
+        Context = context; TableName = tableName; Expression = expression; Provider = new FastOrmQueryProvider(context, tableName);
     }
 
     IEnumerator IEnumerable.GetEnumerator() => throw new NotSupportedException("FastORM: enumerate via AsCompilable()");

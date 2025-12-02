@@ -14,7 +14,9 @@ public static class CrudDemo
         var upd = await ctx.UpdateAsync(new Person { Id = 4, Name = "Dave", Age = 26 });
         Console.WriteLine($"Updated:{upd}");
 
-        var one = await ctx.Person.Where(static p => p.Id == 4).FirstOrDefaultAsync();
+        // Demonstrating non-static lambda support (runtime parameter extraction)
+        int targetId = 4;
+        var one = await ctx.Person.Where(p => p.Id == targetId).FirstOrDefaultAsync();
         if (one is not null) Console.WriteLine($"{one.Name}:{one.Age}");
 
         var del = await ctx.DeleteAsync(new Person { Id = 4 });

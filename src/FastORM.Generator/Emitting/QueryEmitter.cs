@@ -407,6 +407,15 @@ internal static class QueryEmitter
              if (!model.IsInsert && !(model.IsUpdate && (model.UpdateIsEntity || model.UpdateIsBatch)) && !(model.IsDelete && (model.DeleteIsEntity || model.DeleteIsBatch))) sb.Append("    var context = q.Context;\n");
         }
         int paramCounter = 0;
+        
+        if (!model.IsInsert && !(model.IsUpdate && (model.UpdateIsEntity || model.UpdateIsBatch)) && !(model.IsDelete && (model.DeleteIsEntity || model.DeleteIsBatch)) && !model.EndOnIQueryable) 
+        {
+            sb.Append("    var runtimeParams_ = global::FastORM.Internal.ValueExtractor.GetValues(q);\n");
+        }
+        else
+        {
+            sb.Append("    var runtimeParams_ = new System.Collections.Generic.List<object?>();\n");
+        }
 
         if (model.IsInsert)
         {
@@ -622,26 +631,44 @@ internal static class QueryEmitter
 
         AssignParameterIndices(allPredicates, ref paramCounter, ref varCounter);
 
-        bool isDynamic = CheckIsDynamic(allPredicates);
+        bool isDynamic = CheckIsDynamic(allPredicates) || model.DynamicPredicates.Count > 0 || model.EndOnIQueryable;
 
         if (isDynamic)
         {
             sb.Append("    var whereBuilder = new System.Text.StringBuilder();\n");
 
-            if (allPredicates.Count > 0)
+            if (model.EndOnIQueryable)
             {
-                 bool isFirst = true;
-                 foreach(var p in allPredicates)
-                 {
-                     bool negate = model.Aggregation?.NegateFilter == true && p == model.Aggregation.FilterPredicate;
-                     if (!isFirst) sb.Append("    whereBuilder.Append(\" AND \");\n");
-                     else isFirst = false;
-                     if (negate) sb.Append("    whereBuilder.Append(\"NOT (\");\n");
-                     
-                     EmitPredicate(sb, p, model);
-                     
-                     if (negate) sb.Append("    whereBuilder.Append(\")\");\n");
-                 }
+                 sb.Append("    whereBuilder.Append(global::FastORM.Internal.ExpressionToSql.TranslateQueryPredicates(q.Expression, context, runtimeParams_));\n");
+            }
+            else
+            {
+                if (allPredicates.Count > 0)
+                {
+                     bool isFirst = true;
+                     foreach(var p in allPredicates)
+                     {
+                         bool negate = model.Aggregation?.NegateFilter == true && p == model.Aggregation.FilterPredicate;
+                         if (!isFirst) sb.Append("    whereBuilder.Append(\" AND \");\n");
+                         else isFirst = false;
+                         if (negate) sb.Append("    whereBuilder.Append(\"NOT (\");\n");
+                         
+                         EmitPredicate(sb, p, model);
+                         
+                         if (negate) sb.Append("    whereBuilder.Append(\")\");\n");
+                     }
+                }
+                
+                if (model.DynamicPredicates.Count > 0)
+                {
+                     bool isFirst = allPredicates.Count == 0;
+                     for(int i=0; i<model.DynamicPredicates.Count; i++)
+                     {
+                         if (!isFirst) sb.Append("    whereBuilder.Append(\" AND \");\n");
+                         else isFirst = false;
+                         sb.Append("    whereBuilder.Append(global::FastORM.Internal.ExpressionToSql.Translate(").Append(model.DynamicPredicates[i]).Append(", context, runtimeParams_));\n");
+                     }
+                }
             }
         }
         
@@ -873,6 +900,7 @@ internal static class QueryEmitter
         }
         sb.Append("    using var cmd = conn.CreateCommand();\n");
         
+        // Inject Runtime Parameter Extractor
         if (!isDynamic)
             sb.Append("    cmd.CommandText = sql;\n");
         else
@@ -890,10 +918,20 @@ internal static class QueryEmitter
             }
         }
          int paramLocalIndex = 0;
-         foreach(var p in allPredicates)
+         if (!model.EndOnIQueryable)
          {
-              EmitParameters(sb, p, ref paramLocalIndex);
+             foreach(var p in allPredicates)
+             {
+                  EmitParameters(sb, p, ref paramLocalIndex);
+             }
          }
+         
+         sb.Append("    for(int i=0; i<runtimeParams_.Count; i++) {\n");
+         sb.Append("        var p = cmd.CreateParameter();\n");
+         sb.Append("        p.ParameterName = \"@dyn_\" + i;\n");
+         sb.Append("        p.Value = runtimeParams_[i] ?? DBNull.Value;\n");
+         sb.Append("        cmd.Parameters.Add(p);\n");
+         sb.Append("    }\n");
 
         if (model.IsAsync)
         {
@@ -1534,7 +1572,17 @@ internal static class QueryEmitter
                  int idx = paramLocalIndex++;
                  sb.Append("    var p").Append(idx).Append(" = cmd.CreateParameter();\n");
                  sb.Append("    p").Append(idx).Append(".ParameterName = \"@p").Append(p.ParameterIndex).Append("\";\n");
-                 sb.Append("    p").Append(idx).Append(".Value = (object)(").Append(p.RightExpressionCode).Append(") ?? DBNull.Value;\n");
+                 
+                 // Use Runtime Parameter if available, else fallback to code
+                 // Note: Since we now always extract runtime values, we can use the index.
+                 // However, static fields are NOT captured by ValueExtractor (it captures values from the Expression Tree).
+                 // If the code is "p.Id == 5", ValueExtractor returns 5.
+                 // If "p.Id == id", ValueExtractor returns value of id.
+                 // If "p.Id == StaticClass.Field", ValueExtractor returns value of field.
+                 // So we can ALWAYS use runtimeParams_[idx].
+                 // BUT, we must ensure index alignment.
+                 
+                 sb.Append("    p").Append(idx).Append(".Value = (object)runtimeParams_[").Append(p.ParameterIndex).Append("] ?? DBNull.Value;\n");
                  sb.Append("    cmd.Parameters.Add(p").Append(idx).Append(");\n");
              }
         }
