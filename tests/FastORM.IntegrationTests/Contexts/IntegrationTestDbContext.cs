@@ -15,4 +15,7 @@ public sealed class IntegrationTestDbContext : FastDbContext
     
     // Mapped to 'items' table
     public IQueryable<Item> Items => new FastOrmQueryable<Item>(this, "items");
+
+    // Mapped to 'supported_types' table
+    public IQueryable<SupportedTypes> SupportedTypes => new FastOrmQueryable<SupportedTypes>(this, "supported_types");
 }

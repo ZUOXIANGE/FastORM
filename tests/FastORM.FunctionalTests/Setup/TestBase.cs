@@ -75,6 +75,21 @@ public abstract class TestBase
                 IsActive INTEGER,
                 CategoryId TEXT
             );
+
+            CREATE TABLE supported_types (
+                Id INTEGER PRIMARY KEY,
+                StringProp TEXT,
+                IntProp INTEGER,
+                LongProp INTEGER,
+                DecimalProp REAL,
+                DoubleProp REAL,
+                BoolProp INTEGER,
+                DateTimeProp TEXT,
+                GuidProp TEXT,
+                DateOnlyProp TEXT,
+                DateTimeOffsetProp TEXT,
+                EnumProp INTEGER
+            );
         ";
         await cmd.ExecuteNonQueryAsync();
     }

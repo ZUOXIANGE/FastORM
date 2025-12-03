@@ -470,7 +470,7 @@ internal static class QueryEmitter
             sb.Append("    var conn = context.Connection;\n");
             if (model.IsAsync) sb.Append("    if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(cancellationToken);\n");
             else sb.Append("    if (conn.State != System.Data.ConnectionState.Open) conn.Open();\n");
-            sb.Append("    using var cmd = conn.CreateCommand();\n");
+            sb.Append("    using var cmd = context.CreateCommand();\n");
             sb.Append("    cmd.CommandText = sb.ToString();\n");
 
             if (model.InsertIsBatch)
@@ -479,9 +479,33 @@ internal static class QueryEmitter
                 sb.Append("    foreach(var entity in list) {\n");
                 for (int j = 0; j < props.Count; j++)
                 {
+                    var type = props[j].Type;
+                    if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol nts) type = nts.TypeArguments[0];
+
+                    // Unconditional Debug
+                    // sb.Append("        // throw new System.Exception(\"DEBUG CHECK: \" + \"").Append(props[j].Name).Append("\" + \" - \" + \"").Append(type.ToDisplayString()).Append("\");\n");
+
                     sb.Append("        var p").Append(j).Append(" = cmd.CreateParameter();\n");
                     sb.Append("        p").Append(j).Append(".ParameterName = \"@p\" + pIdx + \"_\" + ").Append(j).Append(";\n");
-                    sb.Append("        p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    if (type.ToDisplayString() == "System.DateTimeOffset")
+                    {
+                        sb.Append("        if (context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite) p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append((props[j].NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToString(\"o\") ?? DBNull.Value;\n");
+                        sb.Append("        else if (context.Dialect == FastORM.SqlDialect.PostgreSql) p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append((props[j].NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToUniversalTime() ?? DBNull.Value;\n");
+                        sb.Append("        else p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
+                    else if (type.ToDisplayString() == "System.TimeOnly")
+                    {
+                        sb.Append("        if (context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite) p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append((props[j].NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToString(\"O\") ?? DBNull.Value;\n");
+                        sb.Append("        else p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
+                    else if (type.TypeKind == TypeKind.Enum)
+                    {
+                         sb.Append("        p").Append(j).Append(".Value = (object)(int?)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
+                    else
+                    {
+                        sb.Append("        p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
                     sb.Append("        cmd.Parameters.Add(p").Append(j).Append(");\n");
                 }
                 sb.Append("        pIdx++;\n");
@@ -491,9 +515,31 @@ internal static class QueryEmitter
             {
                 for (int j = 0; j < props.Count; j++)
                 {
+                    var type = props[j].Type;
+                    if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol nts) type = nts.TypeArguments[0];
+
                     sb.Append("    var p").Append(j).Append(" = cmd.CreateParameter();\n");
                     sb.Append("    p").Append(j).Append(".ParameterName = \"@p0_\" + ").Append(j).Append(";\n");
-                    sb.Append("    p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    
+                    if (type.TypeKind == TypeKind.Enum)
+                    {
+                        sb.Append("    p").Append(j).Append(".Value = (object)(int?)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
+                    else if (type.ToDisplayString() == "System.DateTimeOffset")
+                    {
+                        sb.Append("        if (context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite) p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append((props[j].NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToString(\"o\") ?? DBNull.Value;\n");
+                        sb.Append("        else if (context.Dialect == FastORM.SqlDialect.PostgreSql) p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append((props[j].NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToUniversalTime() ?? DBNull.Value;\n");
+                        sb.Append("        else p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
+                    else if (type.ToDisplayString() == "System.TimeOnly")
+                    {
+                        sb.Append("        if (context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite) p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append((props[j].NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToString(\"O\") ?? DBNull.Value;\n");
+                        sb.Append("        else p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
+                    else
+                    {
+                        sb.Append("    p").Append(j).Append(".Value = (object)entity.").Append(props[j].Name).Append(" ?? DBNull.Value;\n");
+                    }
                     sb.Append("    cmd.Parameters.Add(p").Append(j).Append(");\n");
                 }
             }
@@ -553,7 +599,7 @@ internal static class QueryEmitter
                 sb.Append("    {\n");
             }
 
-            sb.Append("        using var cmd = conn.CreateCommand();\n");
+            sb.Append("        using var cmd = context.CreateCommand();\n");
             sb.Append("        sb.Clear();\n");
             sb.Append("        sb.Append(\"UPDATE \").Append(context.Quote(\"").Append(model.TableName).Append("\")).Append(\" SET \");\n");
 
@@ -575,9 +621,29 @@ internal static class QueryEmitter
             pIdx = 0;
             foreach (var p in updateProps)
             {
+                var type = p.Type;
+                if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type is INamedTypeSymbol nts) type = nts.TypeArguments[0];
+
                 sb.Append("        var p").Append(pIdx).Append(" = cmd.CreateParameter();\n");
                 sb.Append("        p").Append(pIdx).Append(".ParameterName = \"@p").Append(pIdx).Append("\";\n");
-                sb.Append("        p").Append(pIdx).Append(".Value = (object)entity.").Append(p.Name).Append(" ?? DBNull.Value;\n");
+                if (type.ToDisplayString() == "System.DateTimeOffset")
+                {
+                     sb.Append("        if (context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite) p").Append(pIdx).Append(".Value = (object)entity.").Append(p.Name).Append((p.NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToString(\"o\") ?? DBNull.Value;\n");
+                     sb.Append("        else p").Append(pIdx).Append(".Value = (object)entity.").Append(p.Name).Append(" ?? DBNull.Value;\n");
+                }
+                else if (type.ToDisplayString() == "System.TimeOnly")
+                {
+                     sb.Append("        if (context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite) p").Append(pIdx).Append(".Value = (object)entity.").Append(p.Name).Append((p.NullableAnnotation == NullableAnnotation.Annotated ? "?" : "")).Append(".ToString(\"O\") ?? DBNull.Value;\n");
+                     sb.Append("        else p").Append(pIdx).Append(".Value = (object)entity.").Append(p.Name).Append(" ?? DBNull.Value;\n");
+                }
+                else if (type.TypeKind == TypeKind.Enum)
+                {
+                    sb.Append("        p").Append(pIdx).Append(".Value = (object)(int?)entity.").Append(p.Name).Append(" ?? DBNull.Value;\n");
+                }
+                else
+                {
+                    sb.Append("        p").Append(pIdx).Append(".Value = (object)entity.").Append(p.Name).Append(" ?? DBNull.Value;\n");
+                }
                 sb.Append("        cmd.Parameters.Add(p").Append(pIdx).Append(");\n");
                 pIdx++;
             }
@@ -621,7 +687,7 @@ internal static class QueryEmitter
                 sb.Append("    }\n");
                 sb.Append("    sb.Append(\")\");\n");
 
-                sb.Append("    using var cmd = conn.CreateCommand();\n");
+                sb.Append("    using var cmd = context.CreateCommand();\n");
                 sb.Append("    cmd.CommandText = sb.ToString();\n");
 
                 sb.Append("    int pIdx = 0;\n");
@@ -639,7 +705,7 @@ internal static class QueryEmitter
             else
             {
                 sb.Append("    sb.Append(\"DELETE FROM \").Append(context.Quote(\"").Append(model.TableName).Append("\")).Append(\" WHERE \").Append(context.Quote(\"").Append(keyCol).Append("\")).Append(\" = @pk\");\n");
-                sb.Append("    using var cmd = conn.CreateCommand();\n");
+                sb.Append("    using var cmd = context.CreateCommand();\n");
                 sb.Append("    cmd.CommandText = sb.ToString();\n");
                 sb.Append("    var pk = cmd.CreateParameter();\n");
                 sb.Append("    pk.ParameterName = \"@pk\";\n");
@@ -948,7 +1014,7 @@ internal static class QueryEmitter
         {
             sb.Append("    if (conn.State != System.Data.ConnectionState.Open) conn.Open();\n");
         }
-        sb.Append("    using var cmd = conn.CreateCommand();\n");
+        sb.Append("    using var cmd = context.CreateCommand();\n");
 
         // Inject Runtime Parameter Extractor
         if (!isDynamic)
@@ -1031,7 +1097,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : reader.").Append(ReaderFor(t)).Append("(").Append(i).Append(");\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1042,7 +1108,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.").Append(ReaderFor(p.Type)).Append("(").Append(i++).Append(");\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1059,7 +1125,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : reader.").Append(ReaderFor(t)).Append("(").Append(i).Append(");\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1070,7 +1136,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.").Append(ReaderFor(p.Type)).Append("(").Append(i++).Append(");\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1127,7 +1193,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : reader.").Append(ReaderFor(t)).Append("(").Append(i).Append(");\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1138,7 +1204,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.").Append(ReaderFor(p.Type)).Append("(").Append(i++).Append(");\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1155,7 +1221,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : reader.").Append(ReaderFor(t)).Append("(").Append(i).Append(");\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1166,7 +1232,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.").Append(ReaderFor(p.Type)).Append("(").Append(i++).Append(");\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1212,6 +1278,34 @@ internal static class QueryEmitter
         return p.Name;
     }
 
+    static string GetReadExpression(ITypeSymbol t, int index)
+    {
+        var actualType = t;
+        if (t.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            var named = t as INamedTypeSymbol;
+            if (named != null) actualType = named.TypeArguments[0];
+        }
+
+        if (actualType.TypeKind == TypeKind.Enum)
+        {
+            return $"({actualType.ToDisplayString()})reader.GetInt32({index})";
+        }
+        if (actualType.ToDisplayString() == "System.DateOnly")
+        {
+            return $"reader.GetFieldValue<System.DateOnly>({index})";
+        }
+        if (actualType.ToDisplayString() == "System.TimeOnly")
+        {
+            return $"(context.Dialect == FastORM.SqlDialect.Sqlite ? System.TimeOnly.Parse(reader.GetString({index})) : reader.GetFieldValue<System.TimeOnly>({index}))";
+        }
+        if (actualType.ToDisplayString() == "System.DateTimeOffset")
+        {
+            return $"(context.Dialect == FastORM.SqlDialect.MySql || context.Dialect == FastORM.SqlDialect.Sqlite ? System.DateTimeOffset.Parse(reader.GetString({index})) : reader.GetFieldValue<System.DateTimeOffset>({index}))";
+        }
+        return $"reader.{ReaderFor(actualType)}({index})";
+    }
+
     static string ReaderFor(ITypeSymbol t)
     {
         switch (t.SpecialType)
@@ -1223,13 +1317,26 @@ internal static class QueryEmitter
             case SpecialType.System_DateTime: return "GetDateTime";
             case SpecialType.System_Decimal: return "GetDecimal";
             case SpecialType.System_Double: return "GetDouble";
-            case SpecialType.System_Single: return "GetFloat";
-        }
-        return "GetValue";
+                case SpecialType.System_Single: return "GetFloat";
+                case SpecialType.System_Byte: return "GetByte";
+            }
+
+            if (t.ToDisplayString() == "System.Guid")
+            {
+                return "GetGuid";
+            }
+
+            return "GetValue";
     }
 
     static bool IsScalarType(ITypeSymbol t)
     {
+        if (t.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            var named = t as INamedTypeSymbol;
+            if (named != null) t = named.TypeArguments[0];
+        }
+
         switch (t.SpecialType)
         {
             case SpecialType.System_Int32:
@@ -1240,10 +1347,18 @@ internal static class QueryEmitter
             case SpecialType.System_Decimal:
             case SpecialType.System_Double:
             case SpecialType.System_Single:
+            case SpecialType.System_Byte:
                 return true;
-            default:
-                return false;
         }
+
+        if (t.TypeKind == TypeKind.Enum) return true;
+
+        if (t.ToDisplayString() == "System.Guid") return true;
+        if (t.ToDisplayString() == "System.DateOnly") return true;
+        if (t.ToDisplayString() == "System.TimeOnly") return true;
+        if (t.ToDisplayString() == "System.DateTimeOffset") return true;
+
+        return false;
     }
 
     private enum GeneratorDialect { SqlServer, MySql, PostgreSql, Sqlite }

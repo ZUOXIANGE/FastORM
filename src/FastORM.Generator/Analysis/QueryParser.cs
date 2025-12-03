@@ -894,6 +894,12 @@ internal static class QueryParser
 
     static bool IsScalar(ITypeSymbol t)
     {
+        if (t.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            if (t is INamedTypeSymbol nts && nts.TypeArguments.Length > 0)
+                return IsScalar(nts.TypeArguments[0]);
+        }
+
         if (t.TypeKind == TypeKind.Enum) return true;
         switch (t.SpecialType)
         {
@@ -909,7 +915,7 @@ internal static class QueryParser
             default:
                 {
                     var name = t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    if (name == "global::System.Guid" || name == "global::System.Byte[]" || name == "global::System.DateOnly" || name == "global::System.TimeOnly") return true;
+                    if (name == "global::System.Guid" || name == "global::System.Byte[]" || name == "global::System.DateOnly" || name == "global::System.TimeOnly" || name == "global::System.DateTimeOffset") return true;
                     return false;
                 }
         }

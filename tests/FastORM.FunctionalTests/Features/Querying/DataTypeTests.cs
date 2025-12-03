@@ -83,4 +83,47 @@ public class DataTypeTests : TestBase
         await Assert.That(expensiveProducts.Count).IsEqualTo(1);
         await Assert.That(expensiveProducts[0].Name).IsEqualTo("Laptop");
     }
+
+    [Test]
+    public async Task Should_Support_Extended_Data_Types()
+    {
+        // Arrange
+        var expected = new SupportedTypes
+        {
+            // Id will be auto-generated
+            StringProp = "Test String",
+            IntProp = 42,
+            LongProp = 1234567890123456789L,
+            DecimalProp = 123.45m,
+            DoubleProp = 3.14159,
+            BoolProp = true,
+            DateTimeProp = new DateTime(2023, 10, 1, 12, 0, 0),
+            GuidProp = Guid.NewGuid(),
+            DateOnlyProp = new DateOnly(2023, 10, 1),
+            DateTimeOffsetProp = new DateTimeOffset(2023, 10, 1, 12, 0, 0, TimeSpan.FromHours(2)),
+            EnumProp = TestEnum.Second
+        };
+
+        // Act
+        await Context.InsertAsync(expected);
+
+        // Assert
+        var actual = await Context.SupportedTypes.Where(x => x.GuidProp == expected.GuidProp).FirstOrDefaultAsync();
+
+        await Assert.That(actual).IsNotNull();
+        await Assert.That(actual!.Id).IsGreaterThan(0);
+        await Assert.That(actual.StringProp).IsEqualTo(expected.StringProp);
+        await Assert.That(actual.IntProp).IsEqualTo(expected.IntProp);
+        await Assert.That(actual.LongProp).IsEqualTo(expected.LongProp);
+        await Assert.That(actual.DecimalProp).IsEqualTo(expected.DecimalProp);
+        await Assert.That(Math.Abs(actual.DoubleProp - expected.DoubleProp)).IsLessThan(0.0001);
+        await Assert.That(actual.BoolProp).IsEqualTo(expected.BoolProp);
+        await Assert.That(actual.DateTimeProp).IsEqualTo(expected.DateTimeProp);
+        await Assert.That(actual.GuidProp).IsEqualTo(expected.GuidProp);
+        
+        // New types
+        await Assert.That(actual.DateOnlyProp).IsEqualTo(expected.DateOnlyProp);
+        await Assert.That(actual.DateTimeOffsetProp).IsEqualTo(expected.DateTimeOffsetProp);
+        await Assert.That(actual.EnumProp).IsEqualTo(expected.EnumProp);
+    }
 }
