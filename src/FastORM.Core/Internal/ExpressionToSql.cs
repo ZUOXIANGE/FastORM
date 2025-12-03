@@ -3,6 +3,11 @@ using System.Text;
 
 namespace FastORM.Internal;
 
+// Suppress IL3050: ValueExtractor.Evaluate is annotated with RequiresDynamicCode,
+// but we use it for general expression evaluation which is mostly safe.
+// The unsafe paths (array creation for unknown types) are edge cases in AOT.
+#pragma warning disable IL3050
+
 public static class ExpressionToSql
 {
     public static string Translate(Expression? expr, FastDbContext? context, List<object?> parameters)
@@ -106,10 +111,10 @@ public static class ExpressionToSql
             {
                 Sql.Append("(");
                 if (isRightNull) Visit(node.Left); else Visit(node.Right);
-                
+
                 if (node.NodeType == ExpressionType.Equal) Sql.Append(" IS NULL");
                 else Sql.Append(" IS NOT NULL");
-                
+
                 Sql.Append(")");
                 return node;
             }
@@ -137,12 +142,6 @@ public static class ExpressionToSql
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            try
-            {
-                System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_sql.txt", $"VisitMethodCall: {node.Method.Name}, DeclaringType: {node.Method.DeclaringType?.FullName}, IsStatic: {node.Method.IsStatic}\n");
-            }
-            catch {}
-
             // Handle method calls like Contains, StartsWith, etc.
             if (node.Method.Name == "Contains" && node.Arguments.Count == 1 && node.Object != null && node.Object.Type == typeof(string))
             {
@@ -194,42 +193,40 @@ public static class ExpressionToSql
                     // And verify it implements IEnumerable (so we can iterate it)
                     // Note: For MemoryExtensions, the argument might be an array but treated as Span.
                     // We need to evaluate the collection expression.
-                    
+
                     bool isParamDep = IsParameterDependent(collection);
-                    try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_sql.txt", $"Collection found. IsParamDependent: {isParamDep}\n"); } catch {}
 
                     if (!isParamDep)
                     {
-                         // Handle implicit conversion to Span/ReadOnlySpan (which cannot be boxed)
-                         // If collection is op_Implicit(array), use array directly.
-                         Expression effectiveCollection = collection;
-                         if (collection is MethodCallExpression mce && mce.Method.Name == "op_Implicit" && mce.Arguments.Count == 1)
-                         {
-                             // Check if return type is Span-like
-                             if (mce.Type.IsValueType && mce.Type.Name.Contains("Span"))
-                             {
-                                 effectiveCollection = mce.Arguments[0];
-                             }
-                         }
+                        // Handle implicit conversion to Span/ReadOnlySpan (which cannot be boxed)
+                        // If collection is op_Implicit(array), use array directly.
+                        Expression effectiveCollection = collection;
+                        if (collection is MethodCallExpression mce && mce.Method.Name == "op_Implicit" && mce.Arguments.Count == 1)
+                        {
+                            // Check if return type is Span-like
+                            if (mce.Type.IsValueType && mce.Type.Name.Contains("Span"))
+                            {
+                                effectiveCollection = mce.Arguments[0];
+                            }
+                        }
 
-                         var colVal = ValueExtractor.Evaluate(effectiveCollection);
-                         try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_sql.txt", $"Collection evaluated. Type: {colVal?.GetType().Name}, Value: {colVal}\n"); } catch {}
-                         
-                         if (colVal is System.Collections.IEnumerable enumerable)
-                         {
-                             Visit(item);
-                             Sql.Append(" IN (");
-                             bool first = true;
-                             foreach (var obj in enumerable)
-                             {
-                                 if (!first) Sql.Append(", ");
-                                 AddParameter(obj);
-                                 first = false;
-                             }
-                             if (first) Sql.Append("NULL"); // Empty list results in IN (NULL) which is safe (false) or handle differently
-                             Sql.Append(")");
-                             return node;
-                         }
+                        var colVal = ValueExtractor.Evaluate(effectiveCollection);
+
+                        if (colVal is System.Collections.IEnumerable enumerable)
+                        {
+                            Visit(item);
+                            Sql.Append(" IN (");
+                            bool first = true;
+                            foreach (var obj in enumerable)
+                            {
+                                if (!first) Sql.Append(", ");
+                                AddParameter(obj);
+                                first = false;
+                            }
+                            if (first) Sql.Append("NULL"); // Empty list results in IN (NULL) which is safe (false) or handle differently
+                            Sql.Append(")");
+                            return node;
+                        }
                     }
                 }
             }

@@ -47,7 +47,7 @@ public class ComplexQueryTests
             var results = await context.Users
                 .Where(static u => u.Name.StartsWith("A") || u.Name.EndsWith("User"))
                 .Where(static u => u.Age >= 25 && u.Age <= 40 || (u.Name == "Hank" && u.Id > 5))
-                .Where(static u => !global::FastORM.FunctionalTests.ComplexQueryTests.ExcludeIds.Contains(u.Id))
+                .Where(static u => !ExcludeIds.Contains(u.Id))
                 .OrderBy(static u => u.Id)
                 .ToListAsync();
 

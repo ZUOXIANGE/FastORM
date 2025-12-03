@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -5,6 +6,7 @@ namespace FastORM.Internal;
 
 public static class ValueExtractor
 {
+    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     public static List<object?> GetValues(IQueryable query)
     {
         var values = new List<object?>();
@@ -18,16 +20,16 @@ public static class ValueExtractor
         {
             // System.Console.WriteLine($"[ValueExtractor] Visiting Method: {mce.Method.Name}");
 
-            if (mce.Method.Name == "Where" || 
-                mce.Method.Name == "Any" || 
-                mce.Method.Name == "All" || 
-                mce.Method.Name == "Count" || 
-                mce.Method.Name == "LongCount" || 
-                mce.Method.Name == "First" || 
-                mce.Method.Name == "FirstOrDefault" || 
-                mce.Method.Name == "Single" || 
-                mce.Method.Name == "SingleOrDefault" || 
-                mce.Method.Name == "Last" || 
+            if (mce.Method.Name == "Where" ||
+                mce.Method.Name == "Any" ||
+                mce.Method.Name == "All" ||
+                mce.Method.Name == "Count" ||
+                mce.Method.Name == "LongCount" ||
+                mce.Method.Name == "First" ||
+                mce.Method.Name == "FirstOrDefault" ||
+                mce.Method.Name == "Single" ||
+                mce.Method.Name == "SingleOrDefault" ||
+                mce.Method.Name == "Last" ||
                 mce.Method.Name == "LastOrDefault")
             {
                 if (mce.Arguments.Count > 1 && mce.Arguments[1] is UnaryExpression ue && ue.Operand is LambdaExpression le)
@@ -55,6 +57,7 @@ public static class ValueExtractor
         return values;
     }
 
+    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     public static List<object?> GetValues(Expression expression)
     {
         var values = new List<object?>();
@@ -70,6 +73,7 @@ public static class ValueExtractor
         return values;
     }
 
+    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     private static void ExtractFromBody(Expression body, List<object?> values)
     {
         // System.Console.WriteLine($"[ValueExtractor] Extracting from: {body}");
@@ -163,11 +167,10 @@ public static class ValueExtractor
         return false;
     }
 
+    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     public static object? Evaluate(Expression? e)
     {
         if (e == null) return null;
-
-        try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_val_trace.txt", $"Evaluate: NodeType={e.NodeType}, Type={e.GetType().Name}, ToString={e}\n"); } catch {}
 
         if (e is ConstantExpression ce) return ce.Value;
 
@@ -185,8 +188,8 @@ public static class ValueExtractor
             if (me.Member is FieldInfo fi)
             {
                 if (fi.IsStatic) return fi.GetValue(null);
-                if (obj == null) {
-                    try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_val.txt", $"MemberExpression {me.Member.Name}: obj is null. Expr: {me.Expression?.GetType().Name}\n"); } catch {}
+                if (obj == null)
+                {
                     return null;
                 }
                 return fi.GetValue(obj);
@@ -194,8 +197,8 @@ public static class ValueExtractor
             else if (me.Member is PropertyInfo pi)
             {
                 if (pi.GetMethod?.IsStatic == true) return pi.GetValue(null);
-                if (obj == null) {
-                    try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_val.txt", $"MemberExpression {me.Member.Name}: obj is null (Prop). Expr: {me.Expression?.GetType().Name}\n"); } catch {}
+                if (obj == null)
+                {
                     return null;
                 }
                 return pi.GetValue(obj);
@@ -206,7 +209,26 @@ public static class ValueExtractor
         {
             var elemType = nae.Type.GetElementType();
             if (elemType == null) return null;
-            var array = Array.CreateInstance(elemType, nae.Expressions.Count);
+
+            Array array;
+            int count = nae.Expressions.Count;
+
+            if (elemType == typeof(int)) array = new int[count];
+            else if (elemType == typeof(string)) array = new string[count];
+            else if (elemType == typeof(long)) array = new long[count];
+            else if (elemType == typeof(Guid)) array = new Guid[count];
+            else if (elemType == typeof(bool)) array = new bool[count];
+            else if (elemType == typeof(double)) array = new double[count];
+            else if (elemType == typeof(decimal)) array = new decimal[count];
+            else if (elemType == typeof(float)) array = new float[count];
+            else if (elemType == typeof(DateTime)) array = new DateTime[count];
+            else if (elemType == typeof(byte)) array = new byte[count];
+            else
+            {
+                // Fallback for other types
+                array = Array.CreateInstance(elemType, count);
+            }
+
             for (int i = 0; i < nae.Expressions.Count; i++)
             {
                 array.SetValue(Evaluate(nae.Expressions[i]), i);
@@ -216,12 +238,31 @@ public static class ValueExtractor
 
         if (e is ListInitExpression lie)
         {
-            var list = Activator.CreateInstance(lie.NewExpression.Type);
-            foreach (var init in lie.Initializers)
+            object? list;
+            if (lie.NewExpression.Constructor != null)
             {
-                if (init.Arguments.Count == 1)
+                var args = new object?[lie.NewExpression.Arguments.Count];
+                for (int i = 0; i < lie.NewExpression.Arguments.Count; i++)
                 {
-                    init.AddMethod.Invoke(list, new[] { Evaluate(init.Arguments[0]) });
+                    args[i] = Evaluate(lie.NewExpression.Arguments[i]);
+                }
+                list = lie.NewExpression.Constructor.Invoke(args);
+            }
+            else
+            {
+#pragma warning disable IL2072
+                list = Activator.CreateInstance(lie.NewExpression.Type);
+#pragma warning restore IL2072
+            }
+
+            if (list != null)
+            {
+                foreach (var init in lie.Initializers)
+                {
+                    if (init.Arguments.Count == 1)
+                    {
+                        init.AddMethod.Invoke(list, new[] { Evaluate(init.Arguments[0]) });
+                    }
                 }
             }
             return list;
