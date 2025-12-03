@@ -163,9 +163,9 @@ internal static class QueryParser
                  var arg = argExpr as LambdaExpressionSyntax;
                  if (arg != null)
                  {
-                      bool isStatic = false;
-                      foreach(var m in arg.Modifiers) { if (m.IsKind(SyntaxKind.StaticKeyword)) isStatic = true; }
-                      if (!isStatic) { return Fail(qModel, Diagnostics.NonStaticLambda); }
+                      string? paramName = null;
+                      if (arg is SimpleLambdaExpressionSyntax sl) paramName = sl.Parameter.Identifier.Text;
+                      else if (arg is ParenthesizedLambdaExpressionSyntax pl && pl.ParameterList.Parameters.Count > 0) paramName = pl.ParameterList.Parameters[0].Identifier.Text;
 
                       if (arg.Body is BlockSyntax block)
                       {
@@ -178,7 +178,7 @@ internal static class QueryParser
                                       var propSym = sm.GetSymbolInfo(maProp).Symbol as IPropertySymbol;
                                       if (propSym != null)
                                       {
-                                          qModel.Updates.Add((propSym.Name, assign.Right.ToString()));
+                                          qModel.Updates.Add((propSym.Name, assign.Right.ToString(), IsDependent(assign.Right, paramName)));
                                       }
                                   }
                               }
@@ -191,7 +191,7 @@ internal static class QueryParser
                                var propSym = sm.GetSymbolInfo(maProp).Symbol as IPropertySymbol;
                                if (propSym != null)
                                {
-                                   qModel.Updates.Add((propSym.Name, assign.Right.ToString()));
+                                   qModel.Updates.Add((propSym.Name, assign.Right.ToString(), IsDependent(assign.Right, paramName)));
                                }
                            }
                       }
@@ -241,7 +241,7 @@ internal static class QueryParser
              qModel.Aggregation = new AggregationModel { Kind = AggregationKind.Exists };
              if (inv.ArgumentList.Arguments.Count > 0)
              {
-                  var arg = inv.ArgumentList.Arguments[0].Expression as SimpleLambdaExpressionSyntax;
+                  var arg = inv.ArgumentList.Arguments[0].Expression as LambdaExpressionSyntax;
                   if (arg != null && arg.Body is ExpressionSyntax body)
              {
                   var p = ParsePredicate(body, qModel, sm);
@@ -254,7 +254,7 @@ internal static class QueryParser
              qModel.Aggregation = new AggregationModel { Kind = AggregationKind.NotExists, NegateFilter = true };
              if (inv.ArgumentList.Arguments.Count > 0)
              {
-                  var arg = inv.ArgumentList.Arguments[0].Expression as SimpleLambdaExpressionSyntax;
+                  var arg = inv.ArgumentList.Arguments[0].Expression as LambdaExpressionSyntax;
                   if (arg != null && arg.Body is ExpressionSyntax body)
              {
                   var p = ParsePredicate(body, qModel, sm);
@@ -278,7 +278,7 @@ internal static class QueryParser
 
             if (inv.ArgumentList.Arguments.Count > 0)
             {
-                 var arg = inv.ArgumentList.Arguments[0].Expression as SimpleLambdaExpressionSyntax;
+                 var arg = inv.ArgumentList.Arguments[0].Expression as LambdaExpressionSyntax;
                  if (arg != null && arg.Body is MemberAccessExpressionSyntax maSel)
                  {
                       var propSym = sm.GetSymbolInfo(maSel).Symbol as IPropertySymbol;
@@ -320,7 +320,7 @@ internal static class QueryParser
                 if (name == "Where")
                 {
                     var argExpr = current.ArgumentList.Arguments[0].Expression;
-                    if (argExpr is SimpleLambdaExpressionSyntax arg)
+                    if (argExpr is LambdaExpressionSyntax arg)
                     {
                         if (arg.Modifiers.ToString().IndexOf("static", StringComparison.Ordinal) < 0) 
                         { 
@@ -554,24 +554,43 @@ internal static class QueryParser
             }
 
             // Normal binary
-            var left = be.Left as MemberAccessExpressionSyntax;
-            if (left != null)
+            var leftExpr = Unwrap(be.Left);
+            var rightExpr = Unwrap(be.Right);
+            
+            var leftMa = leftExpr as MemberAccessExpressionSyntax;
+            var rightMa = rightExpr as MemberAccessExpressionSyntax;
+
+            IPropertySymbol? propSym = null;
+            ExpressionSyntax? otherSide = null;
+            string op = be.OperatorToken.Text;
+            
+            if (leftMa != null)
             {
-                var sym = sm.GetSymbolInfo(left).Symbol as IPropertySymbol;
-                if (sym != null)
-                {
-                    // Note: Right side might be a constant OR a variable/expression.
-                    // If it's a variable, we need to handle it properly in emitter.
-                    // For now, we just store the code. The Emitter will decide if it's a constant or parameter.
-                    // Actually, QueryEmitter.EmitParameters treats everything not in RightConstant as a parameter.
-                    // But we need to be careful: if we just store code, we don't know if it's constant.
-                    
+                propSym = sm.GetSymbolInfo(leftMa).Symbol as IPropertySymbol;
+                if (propSym != null) otherSide = be.Right;
+            }
+            
+            if (propSym == null && rightMa != null)
+            {
+                 propSym = sm.GetSymbolInfo(rightMa).Symbol as IPropertySymbol;
+                 if (propSym != null) 
+                 {
+                     otherSide = be.Left;
+                     // Flip operator
+                     if (op == ">") op = "<";
+                     else if (op == "<") op = ">";
+                     else if (op == ">=") op = "<=";
+                     else if (op == "<=") op = ">=";
+                 }
+            }
+
+            if (propSym != null && otherSide != null)
+            {
                     object? constVal = null;
-                    var constant = sm.GetConstantValue(be.Right);
+                    var constant = sm.GetConstantValue(otherSide);
                     if (constant.HasValue) constVal = constant.Value;
                     
-                    return new PredicateModel { Left = sym, Operator = be.OperatorToken.Text, RightExpressionCode = be.Right.ToString(), RightConstant = constVal, Kind = PredicateKind.Binary };
-                }
+                    return new PredicateModel { Left = propSym, Operator = op, RightExpressionCode = otherSide.ToString(), RightConstant = constVal, Kind = PredicateKind.Binary };
             }
         }
         else if (expr is PrefixUnaryExpressionSyntax pue && pue.OperatorToken.Text == "!")
@@ -704,6 +723,9 @@ internal static class QueryParser
 
     static bool ParseProjectionSource(ExpressionSyntax expr, ProjectionEntry entry, SemanticModel sm)
     {
+        if (expr is ParenthesizedExpressionSyntax pe) return ParseProjectionSource(pe.Expression, entry, sm);
+        if (expr is BinaryExpressionSyntax be && be.OperatorToken.Text == "??") return ParseProjectionSource(be.Left, entry, sm);
+
         if (expr is MemberAccessExpressionSyntax ma)
         {
             var sym = sm.GetSymbolInfo(ma).Symbol;
@@ -829,5 +851,14 @@ internal static class QueryParser
                     return false;
                 }
         }
+    }
+
+    static bool IsDependent(ExpressionSyntax e, string? pName)
+    {
+        if (pName == null) return false;
+        if (e is IdentifierNameSyntax id && id.Identifier.Text == pName) return true;
+        foreach(var child in e.ChildNodes())
+            if (child is ExpressionSyntax ce && IsDependent(ce, pName)) return true;
+        return false;
     }
 }

@@ -1,158 +1,261 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace FastORM.Internal
+namespace FastORM.Internal;
+
+public static class ValueExtractor
 {
-    public static class ValueExtractor
+    public static List<object?> GetValues(IQueryable query)
     {
-        public static List<object?> GetValues(IQueryable query)
-        {
-            var values = new List<object?>();
-            var expr = query.Expression;
-            
-            // DEBUG
-            // System.Console.WriteLine($"[ValueExtractor] Root Expr: {expr}");
+        var values = new List<object?>();
+        var expr = query.Expression;
 
-            var current = expr;
-            while (current is MethodCallExpression mce)
-            {
-                // System.Console.WriteLine($"[ValueExtractor] Visiting Method: {mce.Method.Name}");
-                
-                if (mce.Method.Name == "Where")
-                {
-                    if (mce.Arguments.Count > 1 && mce.Arguments[1] is UnaryExpression ue && ue.Operand is LambdaExpression le)
-                    {
-                        // System.Console.WriteLine($"[ValueExtractor] Found Where Lambda: {le.Body}");
-                        ExtractFromBody(le.Body, values);
-                    }
-                    else if (mce.Arguments.Count > 1 && mce.Arguments[1] is LambdaExpression le2)
-                    {
-                         ExtractFromBody(le2.Body, values);
-                    }
-                }
-                
-                if (mce.Arguments.Count > 0)
-                {
-                    current = mce.Arguments[0];
-                }
-                else
-                {
-                    break;
-                }
-            }
-            
-            // System.Console.WriteLine($"[ValueExtractor] Extracted {values.Count} values");
-             return values;
-         }
+        // DEBUG
+        // System.Console.WriteLine($"[ValueExtractor] Root Expr: {expr}");
 
-        private static void ExtractFromBody(Expression body, List<object?> values)
+        var current = expr;
+        while (current is MethodCallExpression mce)
         {
-            // System.Console.WriteLine($"[ValueExtractor] Extracting from: {body}");
-            
-            if (body is BinaryExpression be)
+            // System.Console.WriteLine($"[ValueExtractor] Visiting Method: {mce.Method.Name}");
+
+            if (mce.Method.Name == "Where" || 
+                mce.Method.Name == "Any" || 
+                mce.Method.Name == "All" || 
+                mce.Method.Name == "Count" || 
+                mce.Method.Name == "LongCount" || 
+                mce.Method.Name == "First" || 
+                mce.Method.Name == "FirstOrDefault" || 
+                mce.Method.Name == "Single" || 
+                mce.Method.Name == "SingleOrDefault" || 
+                mce.Method.Name == "Last" || 
+                mce.Method.Name == "LastOrDefault")
             {
-                if (be.NodeType == ExpressionType.AndAlso || be.NodeType == ExpressionType.OrElse)
+                if (mce.Arguments.Count > 1 && mce.Arguments[1] is UnaryExpression ue && ue.Operand is LambdaExpression le)
                 {
-                    // It's a composite (And/Or). Visit children.
-                    // Order: Left then Right
-                    ExtractFromBody(be.Left, values);
-                    ExtractFromBody(be.Right, values);
+                    // System.Console.WriteLine($"[ValueExtractor] Found Where Lambda: {le.Body}");
+                    ExtractFromBody(le.Body, values);
                 }
-                else
+                else if (mce.Arguments.Count > 1 && mce.Arguments[1] is LambdaExpression le2)
                 {
-                    // It's a leaf (Equality, Comparison, etc.)
-                    // Extract value from the side that is NOT parameter dependent
-                    if (!IsParameterDependent(be.Right))
-                    {
-                        values.Add(Evaluate(be.Right));
-                    }
-                    else if (!IsParameterDependent(be.Left))
-                    {
-                        values.Add(Evaluate(be.Left));
-                    }
-                }
-            }
-            else if (body is MethodCallExpression mce)
-            {
-                // Handle "Like", "Contains", etc.
-                // FastORM supports: Contains, StartsWith, EndsWith -> Like
-                if (mce.Method.Name == "Contains" || mce.Method.Name == "StartsWith" || mce.Method.Name == "EndsWith")
-                {
-                     // System.Console.WriteLine($"[ValueExtractor] Found Like Method: {mce.Method.Name}");
-                     
-                     if (mce.Object != null && !IsParameterDependent(mce.Object))
-                     {
-                         // Instance method where Object is the value (unlikely for String.Contains(p.Prop), but possible for List.Contains(p.Prop))
-                         // Actually List.Contains is usually extension or instance.
-                         values.Add(Evaluate(mce.Object));
-                     }
-                     else if (mce.Object != null && !IsParameterDependent(mce.Arguments[0]))
-                     {
-                         // Instance method: Prop.Contains(Value)
-                         values.Add(Evaluate(mce.Arguments[0]));
-                     }
-                     else if (mce.Arguments.Count > 1)
-                     {
-                         // Extension method
-                         // Find which one is the value
-                         if (!IsParameterDependent(mce.Arguments[0]))
-                             values.Add(Evaluate(mce.Arguments[0]));
-                         else if (!IsParameterDependent(mce.Arguments[1]))
-                             values.Add(Evaluate(mce.Arguments[1]));
-                     }
+                    ExtractFromBody(le2.Body, values);
                 }
             }
-            // Handle Unary (Not)
-            else if (body is UnaryExpression ue && ue.NodeType == ExpressionType.Not)
+
+            if (mce.Arguments.Count > 0)
             {
-                ExtractFromBody(ue.Operand, values);
+                current = mce.Arguments[0];
+            }
+            else
+            {
+                break;
             }
         }
 
-        private static bool IsParameterDependent(Expression? e)
-        {
-            if (e == null) return false;
-            if (e is ParameterExpression) return true;
-            if (e is MemberExpression me) return IsParameterDependent(me.Expression);
-            if (e is UnaryExpression ue) return IsParameterDependent(ue.Operand);
-            if (e is BinaryExpression be) return IsParameterDependent(be.Left) || IsParameterDependent(be.Right);
-            if (e is MethodCallExpression mce) 
-                return IsParameterDependent(mce.Object) || mce.Arguments.Any(IsParameterDependent);
-            if (e is LambdaExpression le) return IsParameterDependent(le.Body);
-            return false;
-        }
+        // System.Console.WriteLine($"[ValueExtractor] Extracted {values.Count} values");
+        return values;
+    }
 
-        public static object? Evaluate(Expression? e)
+    public static List<object?> GetValues(Expression expression)
+    {
+        var values = new List<object?>();
+        // If expression is Lambda, use Body
+        if (expression is LambdaExpression le)
         {
-            if (e == null) return null;
-            
-            if (e is ConstantExpression ce) return ce.Value;
-            
-            if (e is MemberExpression me)
+            ExtractFromBody(le.Body, values);
+        }
+        else
+        {
+            ExtractFromBody(expression, values);
+        }
+        return values;
+    }
+
+    private static void ExtractFromBody(Expression body, List<object?> values)
+    {
+        // System.Console.WriteLine($"[ValueExtractor] Extracting from: {body}");
+
+        if (body is BlockExpression block)
+        {
+            foreach (var stmt in block.Expressions)
             {
-                // Recursively evaluate the object instance
-                // e.g., closureClass.field
-                var obj = Evaluate(me.Expression);
-                
-                if (me.Member is FieldInfo fi)
+                ExtractFromBody(stmt, values);
+            }
+        }
+        else if (body.NodeType == ExpressionType.Assign && body is BinaryExpression assign)
+        {
+            // Assignment: Left = Right
+            // We want the value of Right
+            if (!IsParameterDependent(assign.Right))
+            {
+                values.Add(Evaluate(assign.Right));
+            }
+        }
+        else if (body is BinaryExpression be)
+        {
+            if (be.NodeType == ExpressionType.AndAlso || be.NodeType == ExpressionType.OrElse)
+            {
+                // It's a composite (And/Or). Visit children.
+                // Order: Left then Right
+                ExtractFromBody(be.Left, values);
+                ExtractFromBody(be.Right, values);
+            }
+            else
+            {
+                // It's a leaf (Equality, Comparison, etc.)
+                // Extract value from the side that is NOT parameter dependent
+                if (!IsParameterDependent(be.Right))
                 {
-                    if (fi.IsStatic) return fi.GetValue(null);
-                    if (obj == null) return null; 
-                    return fi.GetValue(obj);
+                    values.Add(Evaluate(be.Right));
                 }
-                else if (me.Member is PropertyInfo pi)
+                else if (!IsParameterDependent(be.Left))
                 {
-                    if (pi.GetMethod?.IsStatic == true) return pi.GetValue(null);
-                    if (obj == null) return null;
-                    return pi.GetValue(obj);
+                    values.Add(Evaluate(be.Left));
                 }
             }
-            
-            // Optimization: We DO NOT support Compile() anymore to maintain AOT compatibility.
-            return null;
         }
+        else if (body is MethodCallExpression mce)
+        {
+            // Handle "Like", "Contains", etc.
+            // FastORM supports: Contains, StartsWith, EndsWith -> Like
+            if (mce.Method.Name == "Contains" || mce.Method.Name == "StartsWith" || mce.Method.Name == "EndsWith")
+            {
+                // System.Console.WriteLine($"[ValueExtractor] Found Like Method: {mce.Method.Name}");
+
+                if (mce.Object != null && !IsParameterDependent(mce.Object))
+                {
+                    // Instance method where Object is the value (unlikely for String.Contains(p.Prop), but possible for List.Contains(p.Prop))
+                    // Actually List.Contains is usually extension or instance.
+                    values.Add(Evaluate(mce.Object));
+                }
+                else if (mce.Object != null && !IsParameterDependent(mce.Arguments[0]))
+                {
+                    // Instance method: Prop.Contains(Value)
+                    values.Add(Evaluate(mce.Arguments[0]));
+                }
+                else if (mce.Arguments.Count > 1)
+                {
+                    // Extension method
+                    // Find which one is the value
+                    if (!IsParameterDependent(mce.Arguments[0]))
+                        values.Add(Evaluate(mce.Arguments[0]));
+                    else if (!IsParameterDependent(mce.Arguments[1]))
+                        values.Add(Evaluate(mce.Arguments[1]));
+                }
+            }
+        }
+        // Handle Unary (Not)
+        else if (body is UnaryExpression ue && ue.NodeType == ExpressionType.Not)
+        {
+            ExtractFromBody(ue.Operand, values);
+        }
+    }
+
+    private static bool IsParameterDependent(Expression? e)
+    {
+        if (e == null) return false;
+        if (e is ParameterExpression) return true;
+        if (e is MemberExpression me) return IsParameterDependent(me.Expression);
+        if (e is UnaryExpression ue) return IsParameterDependent(ue.Operand);
+        if (e is BinaryExpression be) return IsParameterDependent(be.Left) || IsParameterDependent(be.Right);
+        if (e is MethodCallExpression mce)
+            return IsParameterDependent(mce.Object) || mce.Arguments.Any(IsParameterDependent);
+        if (e is LambdaExpression le) return IsParameterDependent(le.Body);
+        return false;
+    }
+
+    public static object? Evaluate(Expression? e)
+    {
+        if (e == null) return null;
+
+        try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_val_trace.txt", $"Evaluate: NodeType={e.NodeType}, Type={e.GetType().Name}, ToString={e}\n"); } catch {}
+
+        if (e is ConstantExpression ce) return ce.Value;
+
+        if (e is UnaryExpression ue && ue.NodeType == ExpressionType.Convert)
+        {
+            return Evaluate(ue.Operand);
+        }
+
+        if (e is MemberExpression me)
+        {
+            // Recursively evaluate the object instance
+            // e.g., closureClass.field
+            var obj = Evaluate(me.Expression);
+
+            if (me.Member is FieldInfo fi)
+            {
+                if (fi.IsStatic) return fi.GetValue(null);
+                if (obj == null) {
+                    try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_val.txt", $"MemberExpression {me.Member.Name}: obj is null. Expr: {me.Expression?.GetType().Name}\n"); } catch {}
+                    return null;
+                }
+                return fi.GetValue(obj);
+            }
+            else if (me.Member is PropertyInfo pi)
+            {
+                if (pi.GetMethod?.IsStatic == true) return pi.GetValue(null);
+                if (obj == null) {
+                    try { System.IO.File.AppendAllText("d:\\Code\\FastORM\\debug_val.txt", $"MemberExpression {me.Member.Name}: obj is null (Prop). Expr: {me.Expression?.GetType().Name}\n"); } catch {}
+                    return null;
+                }
+                return pi.GetValue(obj);
+            }
+        }
+
+        if (e is NewArrayExpression nae && nae.NodeType == ExpressionType.NewArrayInit)
+        {
+            var elemType = nae.Type.GetElementType();
+            if (elemType == null) return null;
+            var array = Array.CreateInstance(elemType, nae.Expressions.Count);
+            for (int i = 0; i < nae.Expressions.Count; i++)
+            {
+                array.SetValue(Evaluate(nae.Expressions[i]), i);
+            }
+            return array;
+        }
+
+        if (e is ListInitExpression lie)
+        {
+            var list = Activator.CreateInstance(lie.NewExpression.Type);
+            foreach (var init in lie.Initializers)
+            {
+                if (init.Arguments.Count == 1)
+                {
+                    init.AddMethod.Invoke(list, new[] { Evaluate(init.Arguments[0]) });
+                }
+            }
+            return list;
+        }
+
+        if (e is MethodCallExpression mce)
+        {
+            // Evaluate object (if instance method)
+            object? obj = null;
+            if (mce.Object != null)
+            {
+                obj = Evaluate(mce.Object);
+                if (obj == null && !mce.Method.IsStatic) return null; // Instance is null
+            }
+
+            // Evaluate arguments
+            var args = new object?[mce.Arguments.Count];
+            for (int i = 0; i < mce.Arguments.Count; i++)
+            {
+                args[i] = Evaluate(mce.Arguments[i]);
+            }
+
+            // Invoke
+            try
+            {
+                return mce.Method.Invoke(obj, args);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // Optimization: We DO NOT support Compile() anymore to maintain AOT compatibility.
+        return null;
     }
 }

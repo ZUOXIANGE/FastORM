@@ -12,8 +12,14 @@ internal static class QueryEmitter
         var elementTypeName = model.Projection is null ? model.ElementType.ToDisplayString() : model.Projection.TypeName;
         sb.Append("namespace ").Append(ns).Append(";\n");
         sb.Append("#nullable enable\n");
+        sb.Append("#pragma warning disable CS8600\n");
         sb.Append("#pragma warning disable CS8601\n");
+        sb.Append("#pragma warning disable CS8602\n");
         sb.Append("#pragma warning disable CS8604\n");
+        sb.Append("#pragma warning disable CS8618\n");
+        sb.Append("#pragma warning disable CS8619\n");
+        sb.Append("#pragma warning disable CS8620\n");
+        sb.Append("#pragma warning disable CS8767\n");
         sb.Append("using System;\nusing System.Collections.Generic;\nusing System.Data.Common;\n");
         if (model.Projection is not null && model.Projection.IsAnonymous)
         {
@@ -248,9 +254,13 @@ internal static class QueryEmitter
                 else if (model.Aggregation.Kind == AggregationKind.Exists)
                 {
                     if (model.Aggregation.FilterPredicate is not null)
+                    {
                          sb.Append("public static async global::System.Threading.Tasks.Task<bool> AnyAsync(this ").Append(recv).Append(" q, global::System.Linq.Expressions.Expression<global::System.Func<").Append(elementTypeName).Append(",bool>> predicate)\n{\n");
+                    }
                     else
+                    {
                         sb.Append("public static async global::System.Threading.Tasks.Task<bool> AnyAsync(this ").Append(recv).Append(" q)\n{\n");
+                    }
                 }
                 else if (model.Aggregation.Kind == AggregationKind.NotExists)
                 {
@@ -632,7 +642,7 @@ internal static class QueryEmitter
         AssignParameterIndices(allPredicates, ref paramCounter, ref varCounter);
 
         bool isDynamic = CheckIsDynamic(allPredicates) || model.DynamicPredicates.Count > 0 || model.EndOnIQueryable;
-
+        
         if (isDynamic)
         {
             sb.Append("    var whereBuilder = new System.Text.StringBuilder();\n");
@@ -640,6 +650,19 @@ internal static class QueryEmitter
             if (model.EndOnIQueryable)
             {
                  sb.Append("    whereBuilder.Append(global::FastORM.Internal.ExpressionToSql.TranslateQueryPredicates(q.Expression, context, runtimeParams_));\n");
+                 
+                 if (model.Aggregation?.FilterPredicate != null)
+                 {
+                     var p = model.Aggregation.FilterPredicate;
+                     sb.Append("    if (whereBuilder.Length > 0) whereBuilder.Append(\" AND \");\n");
+                     
+                     bool negate = model.Aggregation.NegateFilter;
+                     if (negate) sb.Append("    whereBuilder.Append(\"NOT (\");\n");
+                     
+                     EmitPredicate(sb, p, model);
+                     
+                     if (negate) sb.Append("    whereBuilder.Append(\")\");\n");
+                 }
             }
             else
             {
@@ -722,7 +745,8 @@ internal static class QueryEmitter
         }
         else if (model.Aggregation is not null && (model.Aggregation.Kind == AggregationKind.Exists || model.Aggregation.Kind == AggregationKind.NotExists))
         {
-             sb.Append("    sb.Append(\"SELECT CASE WHEN EXISTS (SELECT 1 FROM \").Append(context.Quote(\"").Append(model.TableName).Append("\"));\n");
+             string existsOp = model.Aggregation.Kind == AggregationKind.NotExists ? "NOT EXISTS" : "EXISTS";
+             sb.Append("    sb.Append(\"SELECT CASE WHEN ").Append(existsOp).Append(" (SELECT 1 FROM \").Append(context.Quote(\"").Append(model.TableName).Append("\"));\n");
              // Joins for Exists
              if (model.Join is not null && model.Join.OuterKey is not null && model.Join.InnerKey is not null)
              {
@@ -907,7 +931,7 @@ internal static class QueryEmitter
             sb.Append("    cmd.CommandText = sb.ToString();\n");
 
         // Add parameters
-        if (model.IsUpdate)
+        if (model.IsUpdate && model.Updates.Count > 0)
         {
             for (int i = 0; i < model.Updates.Count; i++)
             {
@@ -933,6 +957,15 @@ internal static class QueryEmitter
          sb.Append("        cmd.Parameters.Add(p);\n");
          sb.Append("    }\n");
 
+
+         sb.Append("    var debugLog = new System.Text.StringBuilder();\n");
+         sb.Append("    debugLog.AppendLine(\"DEBUG SQL: \" + cmd.CommandText);\n");
+         sb.Append("    debugLog.AppendLine(\"DEBUG runtimeParams count: \" + runtimeParams_.Count);\n");
+         sb.Append("    for(int i=0; i<runtimeParams_.Count; i++) debugLog.AppendLine(\"DEBUG runtimeParams[\" + i + \"]: \" + (runtimeParams_[i] == null ? \"null\" : runtimeParams_[i].GetType().Name + \" \" + runtimeParams_[i]));\n");
+         sb.Append("    foreach(System.Data.Common.DbParameter p in cmd.Parameters) debugLog.AppendLine(\"DEBUG Param: \" + p.ParameterName + \" = \" + p.Value);\n");
+         sb.Append("    // System.IO.File.AppendAllText(\"d:\\\\Code\\\\FastORM\\\\debug_output.txt\", debugLog.ToString());\n");
+         sb.Append("    System.Console.WriteLine(debugLog.ToString());\n");
+
         if (model.IsAsync)
         {
             if (model.IsDelete || model.IsUpdate)
@@ -951,7 +984,7 @@ internal static class QueryEmitter
                  else if (model.Aggregation.Kind == AggregationKind.Exists || model.Aggregation.Kind == AggregationKind.NotExists)
                 {
                     if (model.Aggregation.Kind == AggregationKind.NotExists)
-                         sb.Append("    if (await reader.ReadAsync()) return reader.GetInt32(0) == 0;\n    return true;\n");
+                         sb.Append("    if (await reader.ReadAsync()) return reader.GetInt32(0) == 1;\n    return true;\n");
                     else
                         sb.Append("    if (await reader.ReadAsync()) return reader.GetInt32(0) == 1;\n    return false;\n");
                 }
@@ -1047,7 +1080,7 @@ internal static class QueryEmitter
                  else if (model.Aggregation.Kind == AggregationKind.Exists || model.Aggregation.Kind == AggregationKind.NotExists)
                 {
                      if (model.Aggregation.Kind == AggregationKind.NotExists)
-                         sb.Append("    if (reader.Read()) return reader.GetInt32(0) == 0;\n    return true;\n");
+                         sb.Append("    if (reader.Read()) return reader.GetInt32(0) == 1;\n    return true;\n");
                     else
                         sb.Append("    if (reader.Read()) return reader.GetInt32(0) == 1;\n    return false;\n");
                 }
@@ -1437,7 +1470,12 @@ internal static class QueryEmitter
     {
         foreach(var p in preds)
         {
-            if (p.Kind == PredicateKind.In || p.Kind == PredicateKind.NotIn || p.Kind == PredicateKind.LikeGroup)
+            if (p.Kind == PredicateKind.In || p.Kind == PredicateKind.NotIn)
+            {
+                p.ParameterIndex = paramCounter++; // Use parameter index for collection
+                p.VariableIndex = varCounter++;
+            }
+            else if (p.Kind == PredicateKind.LikeGroup)
             {
                 p.VariableIndex = varCounter++;
             }
@@ -1528,7 +1566,7 @@ internal static class QueryEmitter
         else if (p.Kind == PredicateKind.In || p.Kind == PredicateKind.NotIn)
         {
              int idx = p.VariableIndex;
-             sb.Append("    var inVals_").Append(idx).Append(" = (").Append(p.CollectionExpressionCode).Append(").Cast<object>().ToList();\n");
+             sb.Append("    var inVals_").Append(idx).Append(" = ((System.Collections.IEnumerable)runtimeParams_[").Append(p.ParameterIndex).Append("]).Cast<object>().ToList();\n");
              sb.Append("    var inParams_").Append(idx).Append(" = new System.Collections.Generic.List<string>();\n");
              sb.Append("    for(int i=0; i<inVals_").Append(idx).Append(".Count; i++) inParams_").Append(idx).Append(".Add(\"@p_in_").Append(idx).Append("_\" + i);\n");
              

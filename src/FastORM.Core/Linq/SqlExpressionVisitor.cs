@@ -4,6 +4,9 @@ using System.Text;
 
 namespace FastORM;
 
+/// <summary>
+/// Visitor that translates expression tree to SQL.
+/// </summary>
 public class SqlExpressionVisitor : ExpressionVisitor
 {
     private readonly StringBuilder _builder = new();
@@ -12,6 +15,12 @@ public class SqlExpressionVisitor : ExpressionVisitor
     private readonly Func<string, string?> _columnMapper;
     private int _paramIndex;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SqlExpressionVisitor"/> class.
+    /// </summary>
+    /// <param name="quoteFunc">The quote function.</param>
+    /// <param name="columnMapper">The column mapper.</param>
+    /// <param name="startParamIndex">The start parameter index.</param>
     public SqlExpressionVisitor(Func<string, string> quoteFunc, Func<string, string?> columnMapper, int startParamIndex = 0)
     {
         _quoteFunc = quoteFunc;
@@ -19,21 +28,32 @@ public class SqlExpressionVisitor : ExpressionVisitor
         _paramIndex = startParamIndex;
     }
 
+    /// <summary>
+    /// Gets the generated SQL.
+    /// </summary>
     public string Sql => _builder.ToString();
+    /// <summary>
+    /// Gets the parameters.
+    /// </summary>
     public Dictionary<string, object> Parameters => _parameters;
+    /// <summary>
+    /// Gets the next parameter index.
+    /// </summary>
     public int NextParamIndex => _paramIndex;
 
+    /// <inheritdoc/>
     public override Expression? Visit(Expression? node)
     {
         if (node == null) return null;
         return base.Visit(node);
     }
 
+    /// <inheritdoc/>
     protected override Expression VisitBinary(BinaryExpression node)
     {
         _builder.Append("(");
         Visit(node.Left);
-            
+        
         switch (node.NodeType)
         {
             case ExpressionType.Equal: _builder.Append(" = "); break;
@@ -52,6 +72,7 @@ public class SqlExpressionVisitor : ExpressionVisitor
         return node;
     }
 
+    /// <inheritdoc/>
     protected override Expression VisitMember(MemberExpression node)
     {
         if (node.Expression != null && node.Expression.NodeType == ExpressionType.Parameter)
@@ -68,12 +89,14 @@ public class SqlExpressionVisitor : ExpressionVisitor
         return node;
     }
 
+    /// <inheritdoc/>
     protected override Expression VisitConstant(ConstantExpression node)
     {
         AddParameter(node.Value);
         return node;
     }
 
+    /// <inheritdoc/>
     protected override Expression VisitMethodCall(MethodCallExpression node)
     {
         if (node.Method.Name == "Contains" && node.Method.DeclaringType == typeof(Enumerable))

@@ -90,7 +90,7 @@ public class JoinTests
         var totals = ctx.Users
             .Join(ctx.Orders, static u => u.Id, static o => o.UserId, static (u, o) => new JoinResult { Name = u.Name, Amount = o.Amount })
             .GroupBy(static r => r.Name)
-            .Select(static g => new UserTotals { Name = g.Key, Total = g.Sum(static r => r.Amount) })
+            .Select(static g => new UserTotals { Name = g.Key ?? "", Total = g.Sum(static r => r.Amount) })
             .OrderByDescending(static x => x.Total)
             .ToList();
 
