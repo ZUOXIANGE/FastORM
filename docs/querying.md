@@ -54,6 +54,20 @@ var user = await context.Users.FirstOrDefaultAsync(u => u.Id == 1);
 var userSync = context.Users.FirstOrDefault(u => u.Id == 1);
 ```
 
+## 动态查询 (Dynamic Querying)
+
+FastORM 支持使用运行时变量作为查询条件。编译器会智能地将这些变量转换为 SQL 参数。
+
+```csharp
+int minAge = 18;
+string prefix = "A";
+
+// 运行时变量会自动参数化
+var query = await context.Users
+    .Where(u => u.Age >= minAge && u.Name.StartsWith(prefix))
+    .ToListAsync();
+```
+
 ## 聚合查询
 
 支持 `Count`, `Sum`, `Min`, `Max`, `Average`。
@@ -99,11 +113,31 @@ var group = await context.Users
 
 ### In / Not In
 
-FastORM 智能识别 `Contains` 方法并转换为 SQL 的 `IN` 子句。
+FastORM 智能识别 `Contains` 方法并转换为 SQL 的 `IN` 子句。支持数组、列表以及运行时集合。
 
 ```csharp
+// 静态数组
 var ids = new[] { 1, 2, 3 };
 var users = await context.Users
     .Where(u => ids.Contains(u.Id))
     .ToListAsync();
+
+// 运行时列表
+List<string> names = GetNamesFromRequest();
+var targetUsers = await context.Users
+    .Where(u => !names.Contains(u.Name)) // 转换为 NOT IN
+    .ToListAsync();
+```
+
+### Exists / Not Exists
+
+支持使用 `Any` 和 `All` 来生成 `EXISTS` 和 `NOT EXISTS` 子句，常用于复杂的子查询逻辑。
+
+```csharp
+// Exists
+bool hasAdults = await context.Users.AnyAsync(u => u.Age >= 18);
+
+// Not Exists (All)
+// 检查是否所有用户都大于 0 岁 (即不存在 <= 0 岁的用户)
+bool allValid = await context.Users.AllAsync(u => u.Age > 0);
 ```

@@ -1,12 +1,18 @@
 # FastORM
 
+[![CI](https://github.com/ZUOXIANGE/FastORM/actions/workflows/ci.yml/badge.svg)](https://github.com/ZUOXIANGE/FastORM/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/FastORM.svg)](https://www.nuget.org/packages/FastORM)
+[![Downloads](https://img.shields.io/nuget/dt/FastORM.svg)](https://www.nuget.org/packages/FastORM)
+[![License](https://img.shields.io/github/license/ZUOXIANGE/FastORM.svg)](LICENSE.txt)
+
 [中文](README.md) | [English](README_EN.md)
 
 FastORM 是一个高性能、零运行时反射的 .NET ORM 框架，利用 C# Source Generators 在编译时生成高效的 SQL 和 ADO.NET 执行代码。
 
 ## 核心特性
 
-*   **🚀 极致性能**：所有元数据解析、SQL 生成和参数绑定逻辑均在编译时完成，零运行时反射开销，AOT 友好。
+*   **🚀 极致性能**：核心 SQL 生成和参数绑定逻辑在编译时完成，零运行时反射开销，AOT 友好。
+*   **🧩 混合模式**：支持运行时动态查询构建（Dynamic LINQ），在保持高性能的同时提供极大的灵活性。
 *   **🔒 类型安全**：基于标准的 LINQ 语法，编译时检查类型错误。
 *   **📦 多数据库支持**：内置支持 SQL Server, MySQL, PostgreSQL, SQLite。
 *   **⚡ 异步优先**：全链路 Async/Await 支持，高并发友好。
@@ -103,6 +109,13 @@ await ctx.Users
 await ctx.Users
     .Where(u => u.Name == "Unknown")
     .DeleteAsync();
+
+// 7. 动态查询 (Dynamic Query)
+// 支持运行时变量和动态条件
+int minAge = 18;
+var activeUsers = await ctx.Users
+    .Where(u => u.Age >= minAge && u.Name.StartsWith("A"))
+    .ToListAsync();
 ```
 
 ## 文档

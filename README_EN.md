@@ -1,5 +1,10 @@
 # FastORM
 
+[![CI](https://github.com/ZUOXIANGE/FastORM/actions/workflows/ci.yml/badge.svg)](https://github.com/ZUOXIANGE/FastORM/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/FastORM.svg)](https://www.nuget.org/packages/FastORM)
+[![Downloads](https://img.shields.io/nuget/dt/FastORM.svg)](https://www.nuget.org/packages/FastORM)
+[![License](https://img.shields.io/github/license/ZUOXIANGE/FastORM.svg)](LICENSE.txt)
+
 [中文](README.md) | [English](README_EN.md)
 
 FastORM is a high-performance, zero-runtime reflection .NET ORM framework that uses C# Source Generators to generate efficient SQL and ADO.NET execution code at compile time.
@@ -7,6 +12,7 @@ FastORM is a high-performance, zero-runtime reflection .NET ORM framework that u
 ## Core Features
 
 *   **🚀 Extreme Performance**: All metadata parsing, SQL generation, and parameter binding logic are completed at compile time, with zero runtime reflection overhead, making it AOT friendly.
+*   **🧩 Hybrid Mode**: Supports runtime dynamic query construction (Dynamic LINQ), providing great flexibility while maintaining high performance.
 *   **🔒 Type Safety**: Based on standard LINQ syntax, checking for type errors at compile time.
 *   **📦 Multi-Database Support**: Built-in support for SQL Server, MySQL, PostgreSQL, SQLite.
 *   **⚡ Async First**: Full chain Async/Await support, friendly to high concurrency.
