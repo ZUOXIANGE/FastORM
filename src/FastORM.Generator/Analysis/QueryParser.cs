@@ -151,6 +151,31 @@ internal static class QueryParser
                 var props = qModel.ElementType.GetMembers().OfType<IPropertySymbol>()
                    .Where(p => p.SetMethod != null && p.GetMethod != null && IsScalar(p.Type) && p.GetAttributes().All(a => a.AttributeClass?.ToDisplayString() != "FastORM.NavigationAttribute"))
                    .ToList();
+                
+                // Exclude PK if it is integer (AutoIncrement convention)
+                // UNLESS [DatabaseGenerated(DatabaseGeneratedOption.None)] is present
+                var pk = GetPrimaryKey(qModel.ElementType);
+                qModel.PrimaryKey = pk;
+                if (pk != null && (pk.Type.SpecialType == SpecialType.System_Int32 || pk.Type.SpecialType == SpecialType.System_Int64))
+                {
+                    bool isDatabaseGeneratedNone = false;
+                    var dbGeneratedAttr = pk.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "DatabaseGeneratedAttribute");
+                    if (dbGeneratedAttr != null && dbGeneratedAttr.ConstructorArguments.Length > 0)
+                    {
+                        var arg = dbGeneratedAttr.ConstructorArguments[0];
+                        // DatabaseGeneratedOption.None is 0
+                        if (arg.Value is int val && val == 0) 
+                        {
+                            isDatabaseGeneratedNone = true;
+                        }
+                    }
+
+                    if (!isDatabaseGeneratedNone)
+                    {
+                        props.RemoveAll(p => SymbolEqualityComparer.Default.Equals(p, pk));
+                    }
+                }
+
                 qModel.InsertProperties.AddRange(props);
             }
         }
@@ -455,7 +480,44 @@ internal static class QueryParser
                 {
                     current = next;
                 }
-                else if (member.Expression is IdentifierNameSyntax || member.Expression is GenericNameSyntax || member.Expression is MemberAccessExpressionSyntax)
+                else if (member.Expression is IdentifierNameSyntax ident)
+                {
+                    bool resolved = false;
+                    var sym = sm.GetSymbolInfo(ident).Symbol;
+                    if (sym is ILocalSymbol local)
+                    {
+                        var decl = local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as VariableDeclaratorSyntax;
+                        if (decl != null && decl.Initializer != null)
+                        {
+                             var initExpr = Unwrap(decl.Initializer.Value);
+                             if (initExpr is InvocationExpressionSyntax nextInv)
+                             {
+                                 current = nextInv;
+                                 continue;
+                             }
+                             
+                             var baseType = sm.GetTypeInfo(initExpr).Type as INamedTypeSymbol;
+                             if (baseType?.TypeArguments.Length == 1)
+                             {
+                                 qModel.ElementType = baseType.TypeArguments[0];
+                                 qModel.TableName = GetTableName(qModel.ElementType);
+                                 resolved = true;
+                             }
+                        }
+                    }
+
+                    if (resolved) break;
+
+                     // Base
+                     var baseType2 = sm.GetTypeInfo(member.Expression).Type as INamedTypeSymbol;
+                     if (baseType2?.TypeArguments.Length == 1)
+                     {
+                         qModel.ElementType = baseType2.TypeArguments[0];
+                         qModel.TableName = GetTableName(qModel.ElementType);
+                     }
+                     break;
+                }
+                else if (member.Expression is GenericNameSyntax || member.Expression is MemberAccessExpressionSyntax)
                 {
                      // Base
                      var baseType = sm.GetTypeInfo(member.Expression).Type as INamedTypeSymbol;

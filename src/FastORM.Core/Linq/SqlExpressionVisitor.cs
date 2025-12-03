@@ -138,6 +138,33 @@ public class SqlExpressionVisitor : ExpressionVisitor
             _builder.Append(")");
             return node;
         }
+        else if (node.Method.Name == "Contains" && node.Object != null && node.Object.Type == typeof(string))
+        {
+            // String.Contains(value) -> LIKE '%value%'
+            Visit(node.Object);
+            _builder.Append(" LIKE ");
+            var val = GetValue(node.Arguments[0]);
+            AddParameter($"%{val}%");
+            return node;
+        }
+        else if (node.Method.Name == "StartsWith" && node.Object != null && node.Object.Type == typeof(string))
+        {
+            // String.StartsWith(value) -> LIKE 'value%'
+            Visit(node.Object);
+            _builder.Append(" LIKE ");
+            var val = GetValue(node.Arguments[0]);
+            AddParameter($"{val}%");
+            return node;
+        }
+        else if (node.Method.Name == "EndsWith" && node.Object != null && node.Object.Type == typeof(string))
+        {
+            // String.EndsWith(value) -> LIKE '%value'
+            Visit(node.Object);
+            _builder.Append(" LIKE ");
+            var val = GetValue(node.Arguments[0]);
+            AddParameter($"%{val}");
+            return node;
+        }
              
         throw new NotSupportedException($"Method {node.Method.Name} not supported");
     }

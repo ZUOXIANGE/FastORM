@@ -40,6 +40,7 @@ internal sealed class QueryModel
     public string InterceptData { get; set; } = "";
     public ProjectionModel? PreGroupElementProjection { get; set; }
     public bool EndOnIQueryable { get; set; }
+    public IPropertySymbol? PrimaryKey { get; set; }
     public bool HasError { get; set; }
     public DiagnosticDescriptor? ErrorDescriptor { get; set; }
     public string[]? ErrorArgs { get; set; }

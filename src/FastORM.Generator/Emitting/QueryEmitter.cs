@@ -498,8 +498,31 @@ internal static class QueryEmitter
                 }
             }
 
-            if (model.IsAsync) sb.Append("    return await cmd.ExecuteNonQueryAsync(cancellationToken);\n");
-            else sb.Append("    return cmd.ExecuteNonQuery();\n");
+            var pk = model.PrimaryKey ?? QueryParser.GetPrimaryKey(model.ElementType);
+            bool isAuto = pk != null && (pk.Type.SpecialType == SpecialType.System_Int32 || pk.Type.SpecialType == SpecialType.System_Int64);
+            
+            if (!model.InsertIsBatch && isAuto)
+            {
+                 sb.Append("    if (context.Dialect == FastORM.SqlDialect.PostgreSql) cmd.CommandText += \" RETURNING \" + context.Quote(\"").Append(ColumnName(pk!)).Append("\");\n");
+                 sb.Append("    else if (context.Dialect == FastORM.SqlDialect.Sqlite) cmd.CommandText += \"; SELECT last_insert_rowid();\";\n");
+                 sb.Append("    else if (context.Dialect == FastORM.SqlDialect.SqlServer) cmd.CommandText += \"; SELECT SCOPE_IDENTITY();\";\n");
+                 sb.Append("    else if (context.Dialect == FastORM.SqlDialect.MySql) cmd.CommandText += \"; SELECT LAST_INSERT_ID();\";\n");
+
+                 sb.Append("    var result = ");
+                 if (model.IsAsync) sb.Append("await cmd.ExecuteScalarAsync(cancellationToken);\n");
+                 else sb.Append("cmd.ExecuteScalar();\n");
+                 
+                 sb.Append("    if (result != null && result != DBNull.Value) {\n");
+                 sb.Append("        entity.").Append(pk!.Name).Append(" = (").Append(pk.Type.ToDisplayString()).Append(")Convert.ChangeType(result, typeof(").Append(pk.Type.ToDisplayString()).Append("));\n");
+                 sb.Append("        return 1;\n");
+                 sb.Append("    }\n");
+                 sb.Append("    return 0;\n");
+            }
+            else
+            {
+                if (model.IsAsync) sb.Append("    return await cmd.ExecuteNonQueryAsync(cancellationToken);\n");
+                else sb.Append("    return cmd.ExecuteNonQuery();\n");
+            }
             sb.Append("}\n");
             sb.Append("}\n");
             return sb.ToString();
@@ -508,7 +531,7 @@ internal static class QueryEmitter
         if (model.IsUpdate && (model.UpdateIsEntity || model.UpdateIsBatch))
         {
             var props = GetProperties(comp, model.ElementType).ToList();
-            var keyProp = QueryParser.GetPrimaryKey(model.ElementType);
+            var keyProp = model.PrimaryKey ?? QueryParser.GetPrimaryKey(model.ElementType);
             var keyPropName = keyProp?.Name ?? "Id";
             var keyCol = keyProp != null ? ColumnName(keyProp) : "Id";
 
@@ -577,7 +600,7 @@ internal static class QueryEmitter
 
         if (model.IsDelete && (model.DeleteIsEntity || model.DeleteIsBatch))
         {
-            var keyProp = QueryParser.GetPrimaryKey(model.ElementType);
+            var keyProp = model.PrimaryKey ?? QueryParser.GetPrimaryKey(model.ElementType);
             var keyPropName = keyProp?.Name ?? "Id";
             var keyCol = keyProp != null ? ColumnName(keyProp) : "Id";
 
@@ -908,6 +931,7 @@ internal static class QueryEmitter
                     else if (model.SkipCount.HasValue)
                     {
                         sb.Append("        if (context.Dialect == FastORM.SqlDialect.Sqlite) sb.Append(\" LIMIT -1\");\n");
+                        sb.Append("        else if (context.Dialect == FastORM.SqlDialect.MySql) sb.Append(\" LIMIT 18446744073709551615\");\n");
                     }
                     if (model.SkipCount.HasValue) sb.Append("        sb.Append(\" OFFSET ").Append(skip).Append("\");\n");
                     sb.Append("    }\n");

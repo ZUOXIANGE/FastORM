@@ -111,6 +111,56 @@ public static class QueryExtensions
         return source;
     }
 
+    public static CompilableQuery<TResult> Join<TOuter, TInner, TKey, TResult>(
+        this CompilableQuery<TOuter> outer,
+        IEnumerable<TInner> inner,
+        Expression<Func<TOuter, TKey>> outerKeySelector,
+        Expression<Func<TInner, TKey>> innerKeySelector,
+        Expression<Func<TOuter, TInner, TResult>> resultSelector)
+    {
+        return new CompilableQuery<TResult>(outer.Context, outer.TableName);
+    }
+
+    public static IQueryable<TResult> LeftJoin<TOuter, TInner, TKey, TResult>(
+        this IQueryable<TOuter> outer,
+        IEnumerable<TInner> inner,
+        Expression<Func<TOuter, TKey>> outerKeySelector,
+        Expression<Func<TInner, TKey>> innerKeySelector,
+        Expression<Func<TOuter, TInner, TResult>> resultSelector)
+    {
+        throw new NotSupportedException("FastORM: LeftJoin must be intercepted by source generator");
+    }
+
+    public static CompilableQuery<TResult> LeftJoin<TOuter, TInner, TKey, TResult>(
+        this CompilableQuery<TOuter> outer,
+        IEnumerable<TInner> inner,
+        Expression<Func<TOuter, TKey>> outerKeySelector,
+        Expression<Func<TInner, TKey>> innerKeySelector,
+        Expression<Func<TOuter, TInner, TResult>> resultSelector)
+    {
+        return new CompilableQuery<TResult>(outer.Context, outer.TableName);
+    }
+
+    public static IQueryable<TResult> RightJoin<TOuter, TInner, TKey, TResult>(
+        this IQueryable<TOuter> outer,
+        IEnumerable<TInner> inner,
+        Expression<Func<TOuter, TKey>> outerKeySelector,
+        Expression<Func<TInner, TKey>> innerKeySelector,
+        Expression<Func<TOuter, TInner, TResult>> resultSelector)
+    {
+        throw new NotSupportedException("FastORM: RightJoin must be intercepted by source generator");
+    }
+
+    public static CompilableQuery<TResult> RightJoin<TOuter, TInner, TKey, TResult>(
+        this CompilableQuery<TOuter> outer,
+        IEnumerable<TInner> inner,
+        Expression<Func<TOuter, TKey>> outerKeySelector,
+        Expression<Func<TInner, TKey>> innerKeySelector,
+        Expression<Func<TOuter, TInner, TResult>> resultSelector)
+    {
+        return new CompilableQuery<TResult>(outer.Context, outer.TableName);
+    }
+
     public static CompilableQuery<T> Distinct<T>(this CompilableQuery<T> source)
     {
         return source;
