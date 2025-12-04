@@ -179,24 +179,8 @@ public class SqlExpressionVisitor : ExpressionVisitor
     [UnconditionalSuppressMessage("Aot", "IL3050:RequiresDynamicCode", Justification = "Fallback for local expression evaluation.")]
     private object? GetValue(Expression expression)
     {
-        if (expression is ConstantExpression c) return c.Value;
-        if (expression is MemberExpression m)
-        {
-            if (m.Expression == null) // Static field/prop
-            {
-                if (m.Member is System.Reflection.FieldInfo f1) return f1.GetValue(null);
-                if (m.Member is System.Reflection.PropertyInfo p1) return p1.GetValue(null);
-            }
-            else
-            {
-                var obj = GetValue(m.Expression);
-                if (obj == null) return null;
-                if (m.Member is System.Reflection.FieldInfo f) return f.GetValue(obj);
-                if (m.Member is System.Reflection.PropertyInfo p) return p.GetValue(obj);
-            }
-        }
-        var lambda = Expression.Lambda(expression);
-        var func = lambda.Compile();
-        return func.DynamicInvoke();
+        // Try to use ValueExtractor first which is AOT-safe(r)
+        var result = FastORM.Internal.ValueExtractor.Evaluate(expression);
+        return result;
     }
 }

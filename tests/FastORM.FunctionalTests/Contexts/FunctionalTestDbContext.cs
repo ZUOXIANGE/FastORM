@@ -11,4 +11,5 @@ public sealed class FunctionalTestDbContext : FastDbContext
     public IQueryable<Item> Items => new FastOrmQueryable<Item>(this, "Items");
     public IQueryable<Product> Products => new FastOrmQueryable<Product>(this, "Products");
     public IQueryable<SupportedTypes> SupportedTypes => new FastOrmQueryable<SupportedTypes>(this, "supported_types");
+    public IQueryable<NullableEntity> Nullables => new FastOrmQueryable<NullableEntity>(this, "Nullables");
 }

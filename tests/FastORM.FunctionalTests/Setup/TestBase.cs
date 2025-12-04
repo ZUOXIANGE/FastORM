@@ -90,6 +90,14 @@ public abstract class TestBase
                 DateTimeOffsetProp TEXT,
                 EnumProp INTEGER
             );
+
+            CREATE TABLE Nullables (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                IntVal INTEGER NULL,
+                BoolVal INTEGER NULL,
+                DateVal TEXT NULL,
+                StringVal TEXT NULL
+            );
         ";
         await cmd.ExecuteNonQueryAsync();
     }

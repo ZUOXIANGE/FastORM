@@ -6,7 +6,6 @@ namespace FastORM.Internal;
 
 public static class ValueExtractor
 {
-    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     public static List<object?> GetValues(IQueryable query)
     {
         var values = new List<object?>();
@@ -50,7 +49,6 @@ public static class ValueExtractor
         return values;
     }
 
-    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     public static List<object?> GetValues(Expression expression)
     {
         var values = new List<object?>();
@@ -66,7 +64,6 @@ public static class ValueExtractor
         return values;
     }
 
-    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     private static void ExtractFromBody(Expression body, List<object?> values)
     {
         if (body is BlockExpression block)
@@ -156,7 +153,7 @@ public static class ValueExtractor
         return false;
     }
 
-    [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
+    [UnconditionalSuppressMessage("Aot", "IL3050:RequiresDynamicCode", Justification = "Array.CreateInstance is safe when type is referenced in expression tree.")]
     public static object? Evaluate(Expression? e)
     {
         if (e == null) return null;
