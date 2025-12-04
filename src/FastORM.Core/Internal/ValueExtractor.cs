@@ -12,14 +12,9 @@ public static class ValueExtractor
         var values = new List<object?>();
         var expr = query.Expression;
 
-        // DEBUG
-        // System.Console.WriteLine($"[ValueExtractor] Root Expr: {expr}");
-
         var current = expr;
         while (current is MethodCallExpression mce)
         {
-            // System.Console.WriteLine($"[ValueExtractor] Visiting Method: {mce.Method.Name}");
-
             if (mce.Method.Name == "Where" ||
                 mce.Method.Name == "Any" ||
                 mce.Method.Name == "All" ||
@@ -34,7 +29,6 @@ public static class ValueExtractor
             {
                 if (mce.Arguments.Count > 1 && mce.Arguments[1] is UnaryExpression ue && ue.Operand is LambdaExpression le)
                 {
-                    // System.Console.WriteLine($"[ValueExtractor] Found Where Lambda: {le.Body}");
                     ExtractFromBody(le.Body, values);
                 }
                 else if (mce.Arguments.Count > 1 && mce.Arguments[1] is LambdaExpression le2)
@@ -53,7 +47,6 @@ public static class ValueExtractor
             }
         }
 
-        // System.Console.WriteLine($"[ValueExtractor] Extracted {values.Count} values");
         return values;
     }
 
@@ -76,8 +69,6 @@ public static class ValueExtractor
     [RequiresDynamicCode("Value extraction may require dynamic code generation for array creation.")]
     private static void ExtractFromBody(Expression body, List<object?> values)
     {
-        // System.Console.WriteLine($"[ValueExtractor] Extracting from: {body}");
-
         if (body is BlockExpression block)
         {
             foreach (var stmt in block.Expressions)
@@ -123,8 +114,6 @@ public static class ValueExtractor
             // FastORM supports: Contains, StartsWith, EndsWith -> Like
             if (mce.Method.Name == "Contains" || mce.Method.Name == "StartsWith" || mce.Method.Name == "EndsWith")
             {
-                // System.Console.WriteLine($"[ValueExtractor] Found Like Method: {mce.Method.Name}");
-
                 if (mce.Object != null && !IsParameterDependent(mce.Object))
                 {
                     // Instance method where Object is the value (unlikely for String.Contains(p.Prop), but possible for List.Contains(p.Prop))

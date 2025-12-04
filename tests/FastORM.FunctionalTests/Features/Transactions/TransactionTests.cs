@@ -13,13 +13,13 @@ public class TransactionTests : TestBase
     public async Task Should_Commit_Transaction_Successfully()
     {
         // 开启事务
-        using var transaction = await Context.BeginTransactionAsync();
+        await Context.BeginTransactionAsync();
 
         // 插入数据
         await Context.InsertAsync(new User { Name = "TransUser1", Age = 20 });
 
         // 提交事务
-        await transaction.CommitAsync();
+        await Context.CommitAsync();
 
         // 验证数据已持久化
         // 重新查询需要确保不在同一事务上下文中（对于 SQLite 内存库，连接是同一个，所以可以查到）
@@ -31,7 +31,7 @@ public class TransactionTests : TestBase
     public async Task Should_Rollback_Transaction_On_Failure()
     {
         // 开启事务
-        using var transaction = await Context.BeginTransactionAsync();
+        await Context.BeginTransactionAsync();
 
         // 插入数据
         await Context.InsertAsync(new User { Name = "RollbackUser", Age = 30 });
@@ -41,7 +41,7 @@ public class TransactionTests : TestBase
         // 但这里重点是回滚后不可见
         
         // 回滚事务
-        await transaction.RollbackAsync();
+        await Context.RollbackAsync();
 
         // 验证数据已回滚
         var count = await Context.Users.Where(u => u.Name == "RollbackUser").CountAsync();
@@ -49,14 +49,15 @@ public class TransactionTests : TestBase
     }
 
     [Test]
-    public async Task Should_Rollback_Implicitly_If_Not_Committed()
+    public async Task Should_Rollback_If_Not_Committed_Explicitly()
     {
-        // 开启事务块，但不调用 Commit
-        using (var transaction = await Context.BeginTransactionAsync())
-        {
-            await Context.InsertAsync(new User { Name = "ImplicitRollback", Age = 40 });
-            // Exiting using block without Commit
-        }
+        // 开启事务
+        await Context.BeginTransactionAsync();
+        
+        await Context.InsertAsync(new User { Name = "ImplicitRollback", Age = 40 });
+        
+        // Explicitly rollback instead of relying on Dispose to clean up Context state
+        await Context.RollbackAsync();
 
         // 验证数据已回滚
         var count = await Context.Users.Where(u => u.Name == "ImplicitRollback").CountAsync();

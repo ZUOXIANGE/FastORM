@@ -5,9 +5,10 @@ namespace FastORM.Generator;
 
 internal static class QueryEmitter
 {
-    public static string Emit(Compilation comp, QueryModel model)
+    public static string Emit(Compilation comp, QueryModel model, bool isDynamic = false)
     {
         var sb = new StringBuilder();
+        // DEBUG: Ensure generator is updated
         var ns = "FastORM.Generated";
         var elementTypeName = model.Projection is null ? model.ElementType.ToDisplayString() : model.Projection.TypeName;
         sb.Append("namespace ").Append(ns).Append(";\n");
@@ -408,6 +409,8 @@ internal static class QueryEmitter
             }
         }
 
+        sb.Append("    // DEBUG PREDS: " + model.Predicates.Count + "\n");
+
         if (model.EndOnIQueryable)
         {
             sb.Append("    var context = ((global::FastORM.FastOrmQueryable<").Append(elementTypeName).Append(">)q).Context;\n");
@@ -730,9 +733,10 @@ internal static class QueryEmitter
 
         AssignParameterIndices(allPredicates, ref paramCounter, ref varCounter);
 
-        bool isDynamic = CheckIsDynamic(allPredicates) || model.DynamicPredicates.Count > 0 || model.EndOnIQueryable;
+        bool isQueryDynamic = CheckIsDynamic(allPredicates) || model.DynamicPredicates.Count > 0 || model.EndOnIQueryable;
+        isDynamic = isDynamic || isQueryDynamic;
 
-        if (isDynamic)
+        if (isQueryDynamic)
         {
             sb.Append("    var whereBuilder = new System.Text.StringBuilder();\n");
 
@@ -1045,7 +1049,12 @@ internal static class QueryEmitter
         sb.Append("    for(int i=0; i<runtimeParams_.Count; i++) {\n");
         sb.Append("        var p = cmd.CreateParameter();\n");
         sb.Append("        p.ParameterName = \"@dyn_\" + i;\n");
-        sb.Append("        p.Value = runtimeParams_[i] ?? DBNull.Value;\n");
+        sb.Append("        var val = runtimeParams_[i];\n");
+        sb.Append("        if (context.Dialect == FastORM.SqlDialect.Sqlite && val is System.TimeOnly t) p.Value = t.ToString(\"O\");\n");
+        sb.Append("        else if (context.Dialect == FastORM.SqlDialect.Sqlite && val is System.DateOnly d) p.Value = d.ToString(\"O\");\n");
+        sb.Append("        else if (context.Dialect == FastORM.SqlDialect.Sqlite && val is System.DateTimeOffset dto) p.Value = dto.ToString(\"O\");\n");
+        sb.Append("        else if (context.Dialect == FastORM.SqlDialect.Sqlite && val is System.Guid g) p.Value = g.ToString().ToUpper();\n");
+        sb.Append("        else p.Value = val ?? DBNull.Value;\n");
         sb.Append("        cmd.Parameters.Add(p);\n");
         sb.Append("    }\n");
 
@@ -1097,7 +1106,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(t.ToDisplayString()).Append(")").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1108,7 +1117,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(p.Type.ToDisplayString()).Append(")").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1125,7 +1134,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(t.ToDisplayString()).Append(")").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1136,7 +1145,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(p.Type.ToDisplayString()).Append(")").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1193,7 +1202,7 @@ internal static class QueryEmitter
                             var e = model.Projection.Entries[i];
                             var name = e.Alias ?? (e.Kind == ProjectionEntryKind.Property || e.Kind == ProjectionEntryKind.GroupKey ? (e.Property?.Name ?? (e.Aggregator ?? "Col")) : (e.AggregatorProperty is null ? (e.Aggregator ?? "Col") : (e.Aggregator + "_" + e.AggregatorProperty.Name)));
                             var t = e.Type ?? e.Property!.Type;
-                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(t, i)).Append(";\n");
+                            sb.Append("        item.").Append(name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(t.ToDisplayString()).Append(")").Append(GetReadExpression(t, i)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1204,7 +1213,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(p.Type.ToDisplayString()).Append(")").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        return item;\n    }\n    return default;\n");
                     }
@@ -1232,7 +1241,7 @@ internal static class QueryEmitter
                         int i = 0;
                         foreach (var p in props)
                         {
-                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : ").Append(GetReadExpression(p.Type, i++)).Append(";\n");
+                            sb.Append("        item.").Append(p.Name).Append(" = reader.IsDBNull(").Append(i).Append(") ? default : (").Append(p.Type.ToDisplayString()).Append(")").Append(GetReadExpression(p.Type, i++)).Append(";\n");
                         }
                         sb.Append("        list.Add(item);\n");
                     }
@@ -1397,40 +1406,7 @@ internal static class QueryEmitter
                 else isFirst = false;
                 if (negate) whereBuilder.Append("NOT (");
 
-                if (p.Kind == PredicateKind.Binary)
-                {
-                    whereBuilder.Append(quote(ColumnName(p.Left!))).Append(" ");
-                    if (p.Operator == "==") whereBuilder.Append("=");
-                    else if (p.Operator == "!=") whereBuilder.Append("<>");
-                    else if (p.Operator == "&&") whereBuilder.Append("AND");
-                    else if (p.Operator == "||") whereBuilder.Append("OR");
-                    else whereBuilder.Append(p.Operator);
-                    whereBuilder.Append(" ");
-                    if (p.RightConstant != null)
-                    {
-                        if (p.RightConstant is string s) whereBuilder.Append("'").Append(s.Replace("'", "''")).Append("'");
-                        else if (p.RightConstant is bool b) whereBuilder.Append(b ? "1" : "0");
-                        else whereBuilder.Append(p.RightConstant);
-                    }
-                    else
-                    {
-                        whereBuilder.Append("@p").Append(p.ParameterIndex);
-                    }
-                }
-                else if (p.Kind == PredicateKind.Like)
-                {
-                    whereBuilder.Append(quote(ColumnName(p.Left!))).Append(" LIKE ");
-                    if (p.RightConstant is string s) whereBuilder.Append("'").Append(s.Replace("'", "''")).Append("'");
-                    else whereBuilder.Append("@p").Append(p.ParameterIndex);
-                }
-                else if (p.Kind == PredicateKind.IsNull)
-                {
-                    whereBuilder.Append(quote(ColumnName(p.Left!))).Append(" IS NULL");
-                }
-                else if (p.Kind == PredicateKind.IsNotNull)
-                {
-                    whereBuilder.Append(quote(ColumnName(p.Left!))).Append(" IS NOT NULL");
-                }
+                AppendPredicateSql(whereBuilder, p, quote);
 
                 if (negate) whereBuilder.Append(")");
             }
@@ -1453,7 +1429,9 @@ internal static class QueryEmitter
         }
         else if (model.Aggregation is not null && (model.Aggregation.Kind == AggregationKind.Exists || model.Aggregation.Kind == AggregationKind.NotExists))
         {
-            sb.Append("SELECT CASE WHEN EXISTS (SELECT 1 FROM ").Append(quote(model.TableName));
+            sb.Append("SELECT CASE WHEN ");
+            if (model.Aggregation.Kind == AggregationKind.NotExists) sb.Append("NOT ");
+            sb.Append("EXISTS (SELECT 1 FROM ").Append(quote(model.TableName));
             if (model.Join is not null && model.Join.OuterKey is not null && model.Join.InnerKey is not null)
             {
                 var joinType = model.Join.Kind == JoinKind.Left ? " LEFT JOIN " : (model.Join.Kind == JoinKind.Right ? " RIGHT JOIN " : " INNER JOIN ");
@@ -1591,12 +1569,75 @@ internal static class QueryEmitter
                     else if (model.SkipCount.HasValue)
                     {
                         if (dialect == GeneratorDialect.Sqlite) sb.Append(" LIMIT -1");
+                        else if (dialect == GeneratorDialect.MySql) sb.Append(" LIMIT 18446744073709551615");
                     }
                     if (model.SkipCount.HasValue) sb.Append(" OFFSET ").Append(skip);
                 }
             }
         }
         return sb.ToString();
+    }
+
+    static void AppendPredicateSql(StringBuilder sb, PredicateModel p, Func<string, string> quote)
+    {
+        if (p.Kind == PredicateKind.And)
+        {
+            sb.Append("(");
+            bool first = true;
+            foreach (var c in p.Children)
+            {
+                if (!first) sb.Append(" AND ");
+                else first = false;
+                AppendPredicateSql(sb, c, quote);
+            }
+            sb.Append(")");
+        }
+        else if (p.Kind == PredicateKind.Or)
+        {
+            sb.Append("(");
+            bool first = true;
+            foreach (var c in p.Children)
+            {
+                if (!first) sb.Append(" OR ");
+                else first = false;
+                AppendPredicateSql(sb, c, quote);
+            }
+            sb.Append(")");
+        }
+        else if (p.Kind == PredicateKind.Binary)
+        {
+            sb.Append(quote(ColumnName(p.Left!))).Append(" ");
+            if (p.Operator == "==") sb.Append("=");
+            else if (p.Operator == "!=") sb.Append("<>");
+            else if (p.Operator == "&&") sb.Append("AND");
+            else if (p.Operator == "||") sb.Append("OR");
+            else sb.Append(p.Operator);
+            sb.Append(" ");
+            if (p.RightConstant != null)
+            {
+                if (p.RightConstant is string s) sb.Append("'").Append(s.Replace("'", "''")).Append("'");
+                else if (p.RightConstant is bool b) sb.Append(b ? "1" : "0");
+                else sb.Append(p.RightConstant);
+            }
+            else
+            {
+                sb.Append("@dyn_").Append(p.ParameterIndex);
+            }
+        }
+        else if (p.Kind == PredicateKind.Like)
+        {
+            sb.Append(quote(ColumnName(p.Left!))).Append(" LIKE ");
+            if (p.RightConstant is string s) sb.Append("'").Append(s.Replace("'", "''")).Append("'");
+            else sb.Append("@dyn_").Append(p.ParameterIndex);
+        }
+        else if (p.Kind == PredicateKind.IsNull)
+        {
+            sb.Append(quote(ColumnName(p.Left!))).Append(" IS NULL");
+        }
+        else if (p.Kind == PredicateKind.IsNotNull)
+        {
+            sb.Append(quote(ColumnName(p.Left!))).Append(" IS NOT NULL");
+        }
     }
 
     static void AssignParameterIndices(List<PredicateModel> preds, ref int paramCounter, ref int varCounter)
@@ -1677,7 +1718,7 @@ internal static class QueryEmitter
             }
             else
             {
-                sb.Append("@p").Append(p.ParameterIndex);
+                sb.Append("@dyn_").Append(p.ParameterIndex);
             }
             sb.Append("\");\n");
         }
@@ -1685,7 +1726,7 @@ internal static class QueryEmitter
         {
             sb.Append("    whereBuilder.Append(context.Quote(\"").Append(ColumnName(p.Left!)).Append("\")).Append(\" LIKE ");
             if (p.RightConstant is string s) sb.Append("'").Append(Escape(s)).Append("'");
-            else sb.Append("@p").Append(p.ParameterIndex);
+            else sb.Append("@dyn_").Append(p.ParameterIndex);
             sb.Append("\");\n");
         }
         else if (p.Kind == PredicateKind.IsNull)
@@ -1730,6 +1771,7 @@ internal static class QueryEmitter
 
     static void EmitParameters(StringBuilder sb, PredicateModel p, ref int paramLocalIndex)
     {
+        sb.Append(" /* GENERATOR CHECK */ ");
         if (p.Kind == PredicateKind.And || p.Kind == PredicateKind.Or)
         {
             foreach (var c in p.Children) EmitParameters(sb, c, ref paramLocalIndex);
@@ -1742,7 +1784,7 @@ internal static class QueryEmitter
             {
                 int idx = paramLocalIndex++;
                 sb.Append("    var p").Append(idx).Append(" = cmd.CreateParameter();\n");
-                sb.Append("    p").Append(idx).Append(".ParameterName = \"@p").Append(p.ParameterIndex).Append("\";\n");
+                sb.Append("    p").Append(idx).Append(".ParameterName = \"@dyn_").Append(p.ParameterIndex).Append("\";\n");
 
                 // Use Runtime Parameter if available, else fallback to code
                 // Note: Since we now always extract runtime values, we can use the index.
@@ -1752,8 +1794,13 @@ internal static class QueryEmitter
                 // If "p.Id == StaticClass.Field", ValueExtractor returns value of field.
                 // So we can ALWAYS use runtimeParams_[idx].
                 // BUT, we must ensure index alignment.
-
-                sb.Append("    p").Append(idx).Append(".Value = (object)runtimeParams_[").Append(p.ParameterIndex).Append("] ?? DBNull.Value;\n");
+                
+                sb.Append("    var val").Append(idx).Append(" = runtimeParams_[").Append(p.ParameterIndex).Append("];\n");
+                sb.Append("    if (context.Dialect == FastORM.SqlDialect.Sqlite && val").Append(idx).Append(" is System.TimeOnly t").Append(idx).Append(") { var s = t").Append(idx).Append(".ToString(\"O\"); p").Append(idx).Append(".Value = s; }\n");
+                sb.Append("    else if (context.Dialect == FastORM.SqlDialect.Sqlite && val").Append(idx).Append(" is System.DateOnly d").Append(idx).Append(") p").Append(idx).Append(".Value = d").Append(idx).Append(".ToString(\"O\");\n");
+                sb.Append("    else if (context.Dialect == FastORM.SqlDialect.Sqlite && val").Append(idx).Append(" is System.DateTimeOffset dto").Append(idx).Append(") p").Append(idx).Append(".Value = dto").Append(idx).Append(".ToString(\"O\");\n");
+                sb.Append("    else if (context.Dialect == FastORM.SqlDialect.Sqlite && val").Append(idx).Append(" is System.Guid g").Append(idx).Append(") p").Append(idx).Append(".Value = g").Append(idx).Append(".ToString().ToUpper();\n");
+                sb.Append("    else { p").Append(idx).Append(".Value = (object)val").Append(idx).Append(" ?? DBNull.Value; }\n");
                 sb.Append("    cmd.Parameters.Add(p").Append(idx).Append(");\n");
             }
         }
