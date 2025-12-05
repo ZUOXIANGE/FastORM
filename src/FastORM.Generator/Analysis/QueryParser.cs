@@ -95,7 +95,7 @@ internal static class QueryParser
 
                            if (qModel.ElementType != null && string.IsNullOrEmpty(qModel.TableName))
                            {
-                               qModel.TableName = GetTableName(qModel.ElementType);
+                               qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                            }
                       }
                  }
@@ -146,15 +146,15 @@ internal static class QueryParser
 
             if (qModel.ElementType != null)
             {
-                qModel.TableName = GetTableName(qModel.ElementType);
+                qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                 // Get properties
                 var props = qModel.ElementType.GetMembers().OfType<IPropertySymbol>()
-                   .Where(p => p.SetMethod != null && p.GetMethod != null && IsScalar(p.Type) && p.GetAttributes().All(a => a.AttributeClass?.ToDisplayString() != "FastORM.NavigationAttribute"))
+                   .Where(p => p.SetMethod != null && p.GetMethod != null && MetadataHelper.IsScalar(p.Type) && p.GetAttributes().All(a => a.AttributeClass?.ToDisplayString() != "FastORM.NavigationAttribute"))
                    .ToList();
                 
                 // Exclude PK if it is integer (AutoIncrement convention)
                 // UNLESS [DatabaseGenerated(DatabaseGeneratedOption.None)] is present
-                var pk = GetPrimaryKey(qModel.ElementType);
+                var pk = MetadataHelper.GetPrimaryKey(qModel.ElementType);
                 qModel.PrimaryKey = pk;
                 if (pk != null && (pk.Type.SpecialType == SpecialType.System_Int32 || pk.Type.SpecialType == SpecialType.System_Int64))
                 {
@@ -247,12 +247,13 @@ internal static class QueryParser
 
                            if (qModel.ElementType != null && string.IsNullOrEmpty(qModel.TableName))
                            {
-                               qModel.TableName = GetTableName(qModel.ElementType);
+                               qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                            }
                       }
                  }
             }
         }
+
         else if (symbol.Name.StartsWith("Count"))
         {
             qModel.Aggregation = new AggregationModel { Kind = AggregationKind.Count };
@@ -447,7 +448,7 @@ internal static class QueryParser
                              var join = new JoinModel 
                              { 
                                  InnerType = innerEntityType,
-                                 InnerTable = GetTableName(innerEntityType),
+                                 InnerTable = MetadataHelper.GetTableName(innerEntityType),
                                  Kind = name == "LeftJoin" ? JoinKind.Left : (name == "RightJoin" ? JoinKind.Right : JoinKind.Inner)
                              };
                              
@@ -500,7 +501,7 @@ internal static class QueryParser
                              if (baseType?.TypeArguments.Length == 1)
                              {
                                  qModel.ElementType = baseType.TypeArguments[0];
-                                 qModel.TableName = GetTableName(qModel.ElementType);
+                                 qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                                  resolved = true;
                              }
                         }
@@ -513,7 +514,7 @@ internal static class QueryParser
                      if (baseType2?.TypeArguments.Length == 1)
                      {
                          qModel.ElementType = baseType2.TypeArguments[0];
-                         qModel.TableName = GetTableName(qModel.ElementType);
+                         qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                      }
                      break;
                 }
@@ -524,7 +525,7 @@ internal static class QueryParser
                      if (baseType?.TypeArguments.Length == 1)
                      {
                          qModel.ElementType = baseType.TypeArguments[0];
-                         qModel.TableName = GetTableName(qModel.ElementType);
+                         qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                      }
                      break;
                 }
@@ -708,36 +709,7 @@ internal static class QueryParser
         return false;
     }
 
-    static string GetTableName(ITypeSymbol type)
-    {
-        foreach (var a in type.GetAttributes())
-        {
-            if (a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.Schema.TableAttribute")
-            {
-                if (a.ConstructorArguments.Length > 0 && a.ConstructorArguments[0].Value is string s)
-                {
-                    return s;
-                }
-            }
-        }
-        return type.Name;
-    }
 
-    internal static IPropertySymbol? GetPrimaryKey(ITypeSymbol type)
-    {
-        var props = type.GetMembers().OfType<IPropertySymbol>().ToList();
-        // 1. [Key] attribute
-        var keyProp = props.FirstOrDefault(p => p.GetAttributes().Any(a => a.AttributeClass?.Name == "KeyAttribute" || a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.KeyAttribute"));
-        if (keyProp != null) return keyProp;
-
-        // 2. "Id" or "ID"
-        keyProp = props.FirstOrDefault(p => p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase));
-        if (keyProp != null) return keyProp;
-
-        // 3. TypeName + "Id"
-        keyProp = props.FirstOrDefault(p => p.Name.Equals(type.Name + "Id", StringComparison.OrdinalIgnoreCase));
-        return keyProp;
-    }
 
     static void Report(GeneratorSyntaxContext ctx, DiagnosticDescriptor desc, params string[] args)
     {
@@ -892,34 +864,7 @@ internal static class QueryParser
         }
     }
 
-    static bool IsScalar(ITypeSymbol t)
-    {
-        if (t.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
-        {
-            if (t is INamedTypeSymbol nts && nts.TypeArguments.Length > 0)
-                return IsScalar(nts.TypeArguments[0]);
-        }
 
-        if (t.TypeKind == TypeKind.Enum) return true;
-        switch (t.SpecialType)
-        {
-            case SpecialType.System_Int32:
-            case SpecialType.System_Int64:
-            case SpecialType.System_String:
-            case SpecialType.System_Boolean:
-            case SpecialType.System_DateTime:
-            case SpecialType.System_Decimal:
-            case SpecialType.System_Double:
-            case SpecialType.System_Single:
-                return true;
-            default:
-                {
-                    var name = t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    if (name == "global::System.Guid" || name == "global::System.Byte[]" || name == "global::System.DateOnly" || name == "global::System.TimeOnly" || name == "global::System.DateTimeOffset") return true;
-                    return false;
-                }
-        }
-    }
 
     static bool IsDependent(ExpressionSyntax e, string? pName)
     {

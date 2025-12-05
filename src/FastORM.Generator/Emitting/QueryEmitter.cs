@@ -191,6 +191,7 @@ internal static class QueryEmitter
             {
                 sb.Append("public static ").Append(elementTypeName).Append("? FirstOrDefault(this ").Append(recv).Append(" q)\n{\n");
             }
+
             else if (model.IsInsert)
             {
                 sb.Append("public static int Insert(this global::FastORM.FastDbContext context, ");
@@ -547,7 +548,7 @@ internal static class QueryEmitter
                 }
             }
 
-            var pk = model.PrimaryKey ?? QueryParser.GetPrimaryKey(model.ElementType);
+            var pk = model.PrimaryKey ?? MetadataHelper.GetPrimaryKey(model.ElementType);
             bool isAuto = pk != null && (pk.Type.SpecialType == SpecialType.System_Int32 || pk.Type.SpecialType == SpecialType.System_Int64);
             
             if (!model.InsertIsBatch && isAuto)
@@ -580,7 +581,7 @@ internal static class QueryEmitter
         if (model.IsUpdate && (model.UpdateIsEntity || model.UpdateIsBatch))
         {
             var props = GetProperties(comp, model.ElementType).ToList();
-            var keyProp = model.PrimaryKey ?? QueryParser.GetPrimaryKey(model.ElementType);
+            var keyProp = model.PrimaryKey ?? MetadataHelper.GetPrimaryKey(model.ElementType);
             var keyPropName = keyProp?.Name ?? "Id";
             var keyCol = keyProp != null ? ColumnName(keyProp) : "Id";
 
@@ -669,7 +670,7 @@ internal static class QueryEmitter
 
         if (model.IsDelete && (model.DeleteIsEntity || model.DeleteIsBatch))
         {
-            var keyProp = model.PrimaryKey ?? QueryParser.GetPrimaryKey(model.ElementType);
+            var keyProp = model.PrimaryKey ?? MetadataHelper.GetPrimaryKey(model.ElementType);
             var keyPropName = keyProp?.Name ?? "Id";
             var keyCol = keyProp != null ? ColumnName(keyProp) : "Id";
 
@@ -1275,7 +1276,8 @@ internal static class QueryEmitter
     {
         foreach (var a in p.GetAttributes())
         {
-            if (a.AttributeClass?.ToDisplayString() == "FastORM.ColumnAttribute")
+            if (a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute" ||
+                a.AttributeClass?.ToDisplayString() == "FastORM.ColumnAttribute")
             {
                 if (a.ConstructorArguments.Length == 1)
                 {
