@@ -36,9 +36,7 @@ internal static class SchemaParser
                 model.TableName = MetadataHelper.GetTableName(model.ElementType);
                 
                 var props = model.ElementType.GetMembers().OfType<IPropertySymbol>()
-                   .Where(p => p.SetMethod != null && p.GetMethod != null && MetadataHelper.IsScalar(p.Type) 
-                        && p.GetAttributes().All(a => a.AttributeClass?.ToDisplayString() != "FastORM.NavigationAttribute" 
-                            && a.AttributeClass?.ToDisplayString() != "System.ComponentModel.DataAnnotations.Schema.NotMappedAttribute"))
+                   .Where(p => p.SetMethod != null && p.GetMethod != null && MetadataHelper.IsScalar(p.Type) && p.GetAttributes().All(a => a.AttributeClass?.ToDisplayString() != "System.ComponentModel.DataAnnotations.Schema.NotMappedAttribute"))
                    .ToList();
                 
                 model.PrimaryKey = MetadataHelper.GetPrimaryKey(model.ElementType);

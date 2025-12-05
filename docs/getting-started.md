@@ -61,7 +61,10 @@ await connection.OpenAsync();
 // 第二个参数指定数据库方言：SqlServer, MySql, PostgreSql, Sqlite
 var context = new AppDbContext(connection, SqlDialect.Sqlite);
 
-// 3. 开始使用
+// 3. 创建表结构
+await context.CreateTableAsync<Product>();
+
+// 4. 开始使用
 await context.InsertAsync(new Product { Name = "Laptop", Price = 1200 });
 
 var cheapProducts = await context.Products

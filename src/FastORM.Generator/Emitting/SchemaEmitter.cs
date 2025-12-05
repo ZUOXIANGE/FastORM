@@ -235,8 +235,7 @@ internal static class SchemaEmitter
     {
         foreach (var a in p.GetAttributes())
         {
-            if (a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute" ||
-                a.AttributeClass?.ToDisplayString() == "FastORM.ColumnAttribute")
+            if (a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute")
             {
                 foreach (var na in a.NamedArguments)
                 {

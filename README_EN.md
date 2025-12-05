@@ -66,14 +66,10 @@ using FastORM;
 using var connection = new SqliteConnection("Data Source=:memory:");
 await connection.OpenAsync();
 
-// Create table
-using (var command = connection.CreateCommand())
-{
-    command.CommandText = "CREATE TABLE users (Id INTEGER PRIMARY KEY, Name TEXT, Age INTEGER)";
-    await command.ExecuteNonQueryAsync();
-}
-
 var ctx = new MyDbContext(connection, SqlDialect.Sqlite);
+
+// Create table (Auto-generated)
+await ctx.CreateTableAsync<User>();
 
 // 1. Insert
 await ctx.InsertAsync(new User { Id = 1, Name = "Alice", Age = 30 });

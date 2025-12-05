@@ -1276,8 +1276,7 @@ internal static class QueryEmitter
     {
         foreach (var a in p.GetAttributes())
         {
-            if (a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute" ||
-                a.AttributeClass?.ToDisplayString() == "FastORM.ColumnAttribute")
+            if (a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.Schema.ColumnAttribute")
             {
                 if (a.ConstructorArguments.Length == 1)
                 {
