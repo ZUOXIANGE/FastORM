@@ -18,19 +18,21 @@ public static class TransactionDemo
 
         // 1. 成功的事务提交
         Console.WriteLine("[事务 1] 开始执行一个成功的事务...");
+        
+        var person1 = new Person { Name = "TransUser1", Age = 20 };
+        var person2 = new Person { Name = "TransUser2", Age = 22 };
+
         using (var transaction = await ctx.BeginTransactionAsync())
         {
             try
             {
                 // 插入一条记录
-                var person1 = new Person { Id = 8001, Name = "TransUser1", Age = 20 };
                 await ctx.InsertAsync(person1);
-                Console.WriteLine($" - 插入了: {person1.Name}");
+                Console.WriteLine($" - 插入了: {person1.Name}, ID: {person1.Id}");
 
                 // 插入另一条记录
-                var person2 = new Person { Id = 8002, Name = "TransUser2", Age = 22 };
                 await ctx.InsertAsync(person2);
-                Console.WriteLine($" - 插入了: {person2.Name}");
+                Console.WriteLine($" - 插入了: {person2.Name}, ID: {person2.Id}");
 
                 // 提交事务
                 await ctx.CommitAsync();
@@ -44,20 +46,22 @@ public static class TransactionDemo
         }
 
         // 验证是否插入成功
-        var count1 = await ctx.Person.Where(p => p.Id == 8001 || p.Id == 8002).CountAsync();
+        var count1 = await ctx.Person.Where(p => p.Id == person1.Id || p.Id == person2.Id).CountAsync();
         Console.WriteLine($"[验证] 查询 TransUser1 和 TransUser2，找到 {count1} 条记录 (预期 2 条)");
 
 
         // 2. 失败的事务回滚
         Console.WriteLine("\n[事务 2] 开始执行一个将会回滚的事务...");
+        
+        var person3 = new Person { Name = "TransUser3", Age = 30 };
+
         using (var transaction = await ctx.BeginTransactionAsync())
         {
             try
             {
                 // 插入一条记录
-                var person3 = new Person { Id = 8003, Name = "TransUser3", Age = 30 };
                 await ctx.InsertAsync(person3);
-                Console.WriteLine($" - 插入了: {person3.Name}");
+                Console.WriteLine($" - 插入了: {person3.Name}, ID: {person3.Id}");
 
                 // 模拟一个错误 (例如插入重复主键，或者业务逻辑错误)
                 Console.WriteLine(" - 模拟发生异常...");
@@ -76,7 +80,8 @@ public static class TransactionDemo
         }
 
         // 验证是否回滚 (TransUser3 不应该存在)
-        var person3Exists = await ctx.Person.Where(p => p.Id == 8003).CountAsync() > 0;
+        // 注意：回滚后，AutoIncrement ID 可能不会回滚，但记录本身不在了
+        var person3Exists = await ctx.Person.Where(p => p.Id == person3.Id).CountAsync() > 0;
         Console.WriteLine($"[验证] 查询 TransUser3，是否存在: {person3Exists} (预期 False)");
 
         Console.WriteLine();

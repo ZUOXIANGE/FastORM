@@ -12,15 +12,15 @@ using System;
 await using var conn = new SqliteConnection("Data Source=:memory:");
 await conn.OpenAsync();
 
-// 初始化数据库表结构
-await DatabaseSetup.InitializeAsync(conn);
-
 // 创建数据库上下文
 // 配置 SQL 日志输出到控制台，方便观察生成的 SQL
 var ctx = new MyDbContext(conn, SqlDialect.Sqlite)
 {
     SqlLogger = static sql => Console.WriteLine($"[SQL]: {sql}")
 };
+
+// 初始化数据库表结构
+await DatabaseSetup.InitializeAsync(ctx);
 
 Console.WriteLine("FastORM 示例程序启动...\n");
 

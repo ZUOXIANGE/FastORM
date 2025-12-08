@@ -25,6 +25,22 @@ internal static class SchemaParser
         model.Line = nameLoc.StartLinePosition.Line + 1;
         model.Column = nameLoc.StartLinePosition.Character + 1;
 
+        // Try to get intercept location version/data
+        try
+        {
+            var loc = ctx.SemanticModel.GetInterceptableLocation(inv, default);
+            if (loc != null)
+            {
+                var data = loc.Data;
+                if (loc.Version != 0 && !string.IsNullOrEmpty(data))
+                {
+                    model.InterceptVersion = loc.Version;
+                    model.InterceptData = data!;
+                }
+            }
+        }
+        catch { }
+
         if (symbol.Name.EndsWith("Async")) model.IsAsync = true;
 
         if (symbol.Name.StartsWith("CreateTable"))

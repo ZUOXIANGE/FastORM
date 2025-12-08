@@ -54,14 +54,14 @@ public static class BatchUpdateDeleteDemo
         // 插入一些临时数据供测试
         var data = new[]
         {
-            new Person { Id = 3001, Name = "TmpUser_A", Age = 10 },
-            new Person { Id = 3002, Name = "TmpUser_B", Age = 20 },
-            new Person { Id = 3003, Name = "TmpUser_C", Age = 30 }
+            new Person { Name = "TmpUser_A", Age = 10 },
+            new Person { Name = "TmpUser_B", Age = 20 },
+            new Person { Name = "TmpUser_C", Age = 30 }
         };
         
         // 先清理可能存在的旧数据
-        var ids = data.Select(x => x.Id).ToArray();
-        await ctx.Person.Where(p => ids.Contains(p.Id)).DeleteAsync();
+        // 使用 Name 前缀来识别测试数据
+        await ctx.Person.Where(p => p.Name.StartsWith("TmpUser")).DeleteAsync();
 
         await ctx.InsertAsync(data);
         Console.WriteLine($"[准备数据] 插入了 {data.Length} 条临时记录。");

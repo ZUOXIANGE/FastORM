@@ -21,18 +21,19 @@ public static class BulkDemo
         // 一次性插入多条记录，比循环调用 InsertAsync 效率更高
         var newPeople = new[]
         {
-            new Person { Id = 2001, Name = "BatchUser1", Age = 20 },
-            new Person { Id = 2002, Name = "BatchUser2", Age = 22 },
-            new Person { Id = 2003, Name = "BatchUser3", Age = 24 }
+            new Person { Name = "BatchUser1", Age = 20 },
+            new Person { Name = "BatchUser2", Age = 22 },
+            new Person { Name = "BatchUser3", Age = 24 }
         };
 
         var insertCount = await ctx.InsertAsync(newPeople);
         Console.WriteLine($"[批量插入] 成功插入 {insertCount} 条记录。");
 
         // 验证插入结果
-        var insertedIds = newPeople.Select(p => p.Id).ToList();
+        // 由于 ID 是自动生成的，我们使用 Name 来查询
+        var names = newPeople.Select(p => p.Name).ToList();
         var fetched = await ctx.Person
-            .Where(p => insertedIds.Contains(p.Id)) // 使用 IN 查询
+            .Where(p => names.Contains(p.Name)) // 使用 IN 查询
             .ToListAsync();
 
         Console.WriteLine($"[验证] 查询刚才插入的记录:");
@@ -43,8 +44,8 @@ public static class BulkDemo
 
         // 2. 批量删除 (Bulk Delete)
         // 传入对象列表进行批量删除 (通常依据主键)
-        // 这里我们直接使用刚才创建的对象列表进行删除
-        var deleteCount = await ctx.DeleteAsync(newPeople);
+        // 注意：这里我们需要使用查询出来的 fetched 列表，因为它们包含了数据库生成的 ID
+        var deleteCount = await ctx.DeleteAsync(fetched);
         Console.WriteLine($"[批量删除] 成功删除 {deleteCount} 条记录。");
 
         Console.WriteLine();

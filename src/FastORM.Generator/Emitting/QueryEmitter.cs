@@ -55,7 +55,6 @@ internal static class QueryEmitter
         }
         else
         {
-            sb.Append("#pragma warning disable CS9270\n");
             sb.Append("[global::System.Runtime.CompilerServices.InterceptsLocation(\"").Append(Escape(model.FilePath)).Append("\",").Append(model.Line).Append(",").Append(model.Column).Append(")]\n");
 
             if (model.FilePath.Length > 1 && model.FilePath[1] == ':')
@@ -65,8 +64,6 @@ internal static class QueryEmitter
                 var otherPath = otherDrive + model.FilePath.Substring(1);
                 sb.Append("[global::System.Runtime.CompilerServices.InterceptsLocation(\"").Append(Escape(otherPath)).Append("\",").Append(model.Line).Append(",").Append(model.Column).Append(")]\n");
             }
-
-            sb.Append("#pragma warning restore CS9270\n");
         }
         if (!model.IsAsync)
         {

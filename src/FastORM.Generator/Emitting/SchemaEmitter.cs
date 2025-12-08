@@ -19,9 +19,29 @@ internal static class SchemaEmitter
         // Method Signature
         if (model.IsCreateTable)
         {
-            sb.Append("#pragma warning disable CS9270\n");
-            sb.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(@\"").Append(model.FilePath).Append("\", ").Append(model.Line).Append(", ").Append(model.Column).Append(")]\n");
-            sb.Append("#pragma warning restore CS9270\n");
+            var interceptAttr = comp.GetTypeByMetadataName("System.Runtime.CompilerServices.InterceptsLocationAttribute");
+            bool supportsVersion = false;
+            if (interceptAttr != null)
+            {
+                foreach (var ctor in interceptAttr.Constructors)
+                {
+                    if (ctor.Parameters.Length == 2 &&
+                        ctor.Parameters[0].Type.SpecialType == SpecialType.System_Int32 &&
+                        ctor.Parameters[1].Type.SpecialType == SpecialType.System_String)
+                    { supportsVersion = true; break; }
+                }
+            }
+
+            if (supportsVersion && model.InterceptVersion != 0 && model.InterceptData.Length > 0)
+            {
+                sb.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(version: ").Append(model.InterceptVersion).Append(", data: \"").Append(Escape(model.InterceptData)).Append("\")]\n");
+            }
+            else
+            {
+                sb.Append("#pragma warning disable CS9270\n");
+                sb.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(@\"").Append(model.FilePath).Append("\", ").Append(model.Line).Append(", ").Append(model.Column).Append(")]\n");
+                sb.Append("#pragma warning restore CS9270\n");
+            }
 
             if (model.IsAsync)
                 sb.Append("        public static async global::System.Threading.Tasks.Task CreateTableAsync(this global::FastORM.FastDbContext context, global::System.Threading.CancellationToken cancellationToken = default)\n        {\n");
@@ -200,9 +220,29 @@ internal static class SchemaEmitter
         }
         else if (model.IsDropTable)
         {
-            sb.Append("#pragma warning disable CS9270\n");
-            sb.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(@\"").Append(model.FilePath).Append("\", ").Append(model.Line).Append(", ").Append(model.Column).Append(")]\n");
-            sb.Append("#pragma warning restore CS9270\n");
+            var interceptAttr = comp.GetTypeByMetadataName("System.Runtime.CompilerServices.InterceptsLocationAttribute");
+            bool supportsVersion = false;
+            if (interceptAttr != null)
+            {
+                foreach (var ctor in interceptAttr.Constructors)
+                {
+                    if (ctor.Parameters.Length == 2 &&
+                        ctor.Parameters[0].Type.SpecialType == SpecialType.System_Int32 &&
+                        ctor.Parameters[1].Type.SpecialType == SpecialType.System_String)
+                    { supportsVersion = true; break; }
+                }
+            }
+
+            if (supportsVersion && model.InterceptVersion != 0 && model.InterceptData.Length > 0)
+            {
+                sb.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(version: ").Append(model.InterceptVersion).Append(", data: \"").Append(Escape(model.InterceptData)).Append("\")]\n");
+            }
+            else
+            {
+                sb.Append("#pragma warning disable CS9270\n");
+                sb.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(@\"").Append(model.FilePath).Append("\", ").Append(model.Line).Append(", ").Append(model.Column).Append(")]\n");
+                sb.Append("#pragma warning restore CS9270\n");
+            }
 
             if (model.IsAsync)
                 sb.Append("        public static async global::System.Threading.Tasks.Task DropTableAsync(this global::FastORM.FastDbContext context, global::System.Threading.CancellationToken cancellationToken = default)\n        {\n");
@@ -253,5 +293,10 @@ internal static class SchemaEmitter
             }
         }
         return p.Name;
+    }
+
+    static string Escape(string s)
+    {
+        return s.Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 }

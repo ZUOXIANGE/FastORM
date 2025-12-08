@@ -63,22 +63,22 @@ public static class SimpleQueryDemo
         {
             var people = new[]
             {
-                new Person { Id = 101, Name = "Bob", Age = 20 },
-                new Person { Id = 102, Name = "Charlie", Age = 30 },
-                new Person { Id = 103, Name = "David", Age = 40 },
-                new Person { Id = 104, Name = "Eva", Age = 22 },
-                new Person { Id = 105, Name = "Frank", Age = 35 },
-                new Person { Id = 106, Name = "Grace", Age = 28 },
-                new Person { Id = 107, Name = "Helen", Age = 45 },
-                new Person { Id = 108, Name = "Ivan", Age = 19 },
-                new Person { Id = 109, Name = "Jack", Age = 50 },
-                new Person { Id = 110, Name = "Kelly", Age = 33 }
+                new Person { Name = "Bob", Age = 20 },
+                new Person { Name = "Charlie", Age = 30 },
+                new Person { Name = "David", Age = 40 },
+                new Person { Name = "Eva", Age = 22 },
+                new Person { Name = "Frank", Age = 35 },
+                new Person { Name = "Grace", Age = 28 },
+                new Person { Name = "Helen", Age = 45 },
+                new Person { Name = "Ivan", Age = 19 },
+                new Person { Name = "Jack", Age = 50 },
+                new Person { Name = "Kelly", Age = 33 }
             };
             
-            // 过滤掉已存在的 ID (简单处理，避免主键冲突)
+            // 过滤掉已存在的记录 (避免重复)
             foreach(var p in people)
             {
-                var exists = await ctx.Person.Where(x => x.Id == p.Id).CountAsync() > 0;
+                var exists = await ctx.Person.Where(x => x.Name == p.Name && x.Age == p.Age).CountAsync() > 0;
                 if (!exists) await ctx.InsertAsync(p);
             }
         }

@@ -76,16 +76,26 @@ public static class JoinDemo
 
     private static async Task EnsureOrderDataAsync(MyDbContext ctx)
     {
-        var count = await ctx.Orders.CountAsync();
-        if (count == 0)
+        // Ensure we have an order for an unknown user (for Right Join demo)
+        var hasUnknown = await ctx.Orders.Where(o => o.UserId == 999).CountAsync() > 0;
+        if (!hasUnknown)
         {
-            await ctx.InsertAsync(new[]
-            {
-                new Order { Id = 1, UserId = 101, Amount = 100 }, // Bob
-                new Order { Id = 2, UserId = 101, Amount = 25 },  // Bob
-                new Order { Id = 3, UserId = 102, Amount = 200 }, // Charlie
-                new Order { Id = 4, UserId = 999, Amount = 500 }  // UserId 999 (Unknown person)
-            });
+            await ctx.InsertAsync(new Order { UserId = 999, Amount = 500 });
+        }
+
+        // Ensure Bob has orders (for Inner/Left Join demo)
+        var bob = await ctx.Person.Where(p => p.Name == "Bob").FirstOrDefaultAsync();
+        if (bob != null)
+        {
+             var bobOrders = await ctx.Orders.Where(o => o.UserId == bob.Id).CountAsync();
+             if (bobOrders == 0)
+             {
+                 await ctx.InsertAsync(new[]
+                 {
+                     new Order { UserId = bob.Id, Amount = 100 },
+                     new Order { UserId = bob.Id, Amount = 25 }
+                 });
+             }
         }
     }
 }

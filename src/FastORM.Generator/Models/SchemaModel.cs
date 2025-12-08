@@ -13,6 +13,10 @@ internal sealed class SchemaModel
     public IPropertySymbol? PrimaryKey { get; set; }
     public bool IsAsync { get; set; }
     
+    // Interception info
+    public int InterceptVersion { get; set; }
+    public string InterceptData { get; set; } = "";
+
     // Location info
     public string FilePath { get; set; } = "";
     public int Line { get; set; }

@@ -149,7 +149,7 @@ internal static class QueryParser
                 qModel.TableName = MetadataHelper.GetTableName(qModel.ElementType);
                 // Get properties
                 var props = qModel.ElementType.GetMembers().OfType<IPropertySymbol>()
-                   .Where(p => p.SetMethod != null && p.GetMethod != null && MetadataHelper.IsScalar(p.Type) && p.GetAttributes().All(a => a.AttributeClass?.ToDisplayString() != "FastORM.NavigationAttribute"))
+                   .Where(p => p.SetMethod != null && p.GetMethod != null && MetadataHelper.IsScalar(p.Type))
                    .ToList();
                 
                 // Exclude PK if it is integer (AutoIncrement convention)

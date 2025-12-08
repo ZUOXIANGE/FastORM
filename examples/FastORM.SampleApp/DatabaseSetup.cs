@@ -1,25 +1,36 @@
-using Microsoft.Data.Sqlite;
+using FastORM.SampleApp.Models;
+using System.Threading.Tasks;
 
 namespace FastORM.SampleApp;
 
 public static class DatabaseSetup
 {
-    public static async Task InitializeAsync(SqliteConnection conn)
+    public static async Task InitializeAsync(MyDbContext ctx)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "CREATE TABLE People(Id INTEGER PRIMARY KEY, Name TEXT, Age INTEGER);";
-        await cmd.ExecuteNonQueryAsync();
+        // 1. Re-create Tables (Schema Generation)
+        await ctx.DropTableAsync<Person>();
+        await ctx.DropTableAsync<Order>();
+        
+        await ctx.CreateTableAsync<Person>();
+        await ctx.CreateTableAsync<Order>();
 
-        using var insert = conn.CreateCommand();
-        insert.CommandText = "INSERT INTO People(Id,Name,Age) VALUES(1,'Alice',30),(2,'Bob',17),(3,'Carol',22);";
-        await insert.ExecuteNonQueryAsync();
+        // 2. Insert Data
+        // Person
+        var alice = new Person { Name = "Alice", Age = 30 };
+        var bob = new Person { Name = "Bob", Age = 17 };
+        var carol = new Person { Name = "Carol", Age = 22 };
 
-        using var cmd2 = conn.CreateCommand();
-        cmd2.CommandText = "CREATE TABLE Orders(Id INTEGER PRIMARY KEY, UserId INTEGER, Amount REAL);";
-        await cmd2.ExecuteNonQueryAsync();
+        // Insert individually to populate Ids (AutoIncrement)
+        await ctx.InsertAsync(alice);
+        await ctx.InsertAsync(bob);
+        await ctx.InsertAsync(carol);
 
-        using var ins2 = conn.CreateCommand();
-        ins2.CommandText = "INSERT INTO Orders(Id,UserId,Amount) VALUES(100,1,12.5),(101,1,20.0),(102,3,7.0);";
-        await ins2.ExecuteNonQueryAsync();
+        // Orders
+        // Alice has orders
+        await ctx.InsertAsync(new Order { UserId = alice.Id, Amount = 12.5m });
+        await ctx.InsertAsync(new Order { UserId = alice.Id, Amount = 20.0m });
+        
+        // Carol has order
+        await ctx.InsertAsync(new Order { UserId = carol.Id, Amount = 7.0m });
     }
 }
